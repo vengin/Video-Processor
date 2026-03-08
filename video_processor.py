@@ -427,7 +427,7 @@ class VideoProcessor:
       ffmpeg_command[3:5] = ffmpeg_tempo_params
 
 
-    logging.debug(f"Process File: FFMPEG command: {' '.join(ffmpeg_command)}")
+    logging.info(f"Process File: FFMPEG command: {' '.join(ffmpeg_command)}")
     return ffmpeg_command
 
 
@@ -683,7 +683,7 @@ class VideoProcessor:
               self.total_dst_seconds += dst_seconds
               logging.debug(f"{relative_path}: dst_seconds={dst_seconds}")
             else:
-              msg = f"Could not get audio file metadata for {full_path}"
+              msg = f"Could not get media file metadata for {full_path}"
               logging.error(msg)
               self.status_update_queue.put(msg)
               self.error_files += 1
