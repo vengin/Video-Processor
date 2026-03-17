@@ -26,6 +26,9 @@ DFLT_LOG_FILE = "video_processor.log"
 VID_EXT = ('.mp4', '.mkv', 'avi', '.webm', '.flv', '.wmv')
 DFLT_OVERWRITE_OPTION = "Skip existing files"  # Skip by default
 DFLT_PRESET = "Preset1: Slow"
+DFLT_CRF = 23
+DFLT_VF_SCALE = 0.5
+DFLT_AUDIO_BITRATE = "64k"
 GUI_TIMEOUT = 0.3 # in seconds
 UPDATE_STATUS_TIMEOUT = 1 # in seconds
 
@@ -118,6 +121,9 @@ class VideoProcessor:
     self.run_button = None
     self.overwrite_options = tk.StringVar(value=DFLT_OVERWRITE_OPTION)
     self.preset = tk.StringVar(value=DFLT_PRESET)
+    self.crf = tk.StringVar(value=str(DFLT_CRF))
+    self.vf_scale = tk.StringVar(value=str(DFLT_VF_SCALE))
+    self.audio_bitrate = tk.StringVar(value=DFLT_AUDIO_BITRATE)
 
     # Initialize GUI variables as empty
     self.ffmpeg_path = tk.StringVar()
@@ -201,6 +207,9 @@ class VideoProcessor:
         self.n_threads.set(int(self.config['DEFAULT'].get('n_threads', str(DFLT_N_THREADS))))
         self.overwrite_options.set(self.config['DEFAULT'].get('overwrite_option', DFLT_OVERWRITE_OPTION))
         self.preset.set(self.config['DEFAULT'].get('preset', DFLT_PRESET))
+        self.crf.set(self.config['DEFAULT'].get('crf', str(DFLT_CRF)))
+        self.vf_scale.set(self.config['DEFAULT'].get('vf_scale', str(DFLT_VF_SCALE)))
+        self.audio_bitrate.set(self.config['DEFAULT'].get('audio_bitrate', DFLT_AUDIO_BITRATE))
       except Exception as e:
         messagebox.showerror("Config Error", f"Could not load config file: {e}")
 
@@ -219,6 +228,9 @@ class VideoProcessor:
     self.config['DEFAULT']['dst_dir'] = self.dst_dir.get()
     self.config['DEFAULT']['overwrite_option'] = self.overwrite_options.get()
     self.config['DEFAULT']['preset'] = self.preset.get()
+    self.config['DEFAULT']['crf'] = self.crf.get()
+    self.config['DEFAULT']['vf_scale'] = self.vf_scale.get()
+    self.config['DEFAULT']['audio_bitrate'] = self.audio_bitrate.get()
     try:
       with open(DFLT_CONFIG_FILE, 'w') as configfile:
         self.config.write(configfile)
@@ -259,11 +271,35 @@ class VideoProcessor:
 
     # Preset choice
     ttk.Label(self.master, text="Encoding Preset:").grid(row=5, column=0, sticky=tk.W, padx=5)
-    self.preset_combobox = ttk.Combobox(self.master,
+    preset_frame = ttk.Frame(self.master)
+    preset_frame.grid(row=5, column=1, sticky=tk.W)
+
+    self.preset_combobox = ttk.Combobox(preset_frame,
       textvariable=self.preset,
-      values=["Preset1: Slow", "Preset2: Fast"],
-      state="readonly")
-    self.preset_combobox.grid(row=5, column=1, sticky=tk.W)
+      values=["Preset1: Slow", "Preset2: Fast", "Preset3: Custom"],
+      state="readonly", width=15)
+    self.preset_combobox.pack(side=tk.LEFT)
+    self.preset_combobox.bind("<<ComboboxSelected>>", self.on_preset_change)
+
+    self.custom_opts_frame = ttk.Frame(preset_frame)
+    self.custom_opts_frame.pack(side=tk.LEFT, padx=(10, 0))
+
+    ttk.Label(self.custom_opts_frame, text="CRF:").pack(side=tk.LEFT, padx=(0, 2))
+    self.crf_entry = ttk.Entry(self.custom_opts_frame, textvariable=self.crf, width=4)
+    self.crf_entry.pack(side=tk.LEFT, padx=(0, 10))
+    self.crf_entry.bind('<FocusOut>', self.on_crf_focusout)
+
+    ttk.Label(self.custom_opts_frame, text="VF Scale:").pack(side=tk.LEFT, padx=(0, 2))
+    self.vf_scale_entry = ttk.Entry(self.custom_opts_frame, textvariable=self.vf_scale, width=4)
+    self.vf_scale_entry.pack(side=tk.LEFT, padx=(0, 10))
+    self.vf_scale_entry.bind('<FocusOut>', self.on_vf_scale_focusout)
+
+    ttk.Label(self.custom_opts_frame, text="Audio Bitrate:").pack(side=tk.LEFT, padx=(0, 2))
+    self.audio_bitrate_entry = ttk.Entry(self.custom_opts_frame, textvariable=self.audio_bitrate, width=5)
+    self.audio_bitrate_entry.pack(side=tk.LEFT)
+    self.audio_bitrate_entry.bind('<FocusOut>', self.on_audio_bitrate_focusout)
+
+    self.on_preset_change()  # initialize state
 
     # Run button
     self.run_button = tk.Button(self.master, text="Run", command=self.start_processing, state=tk.NORMAL, height=2, width=20)
@@ -299,6 +335,15 @@ class VideoProcessor:
     directory = filedialog.askdirectory(initialdir=self.dst_dir.get())
     if directory:  # Check if a directory was selected
       self.dst_dir.set(os.path.normpath(directory))
+
+
+  #############################################################################
+  def on_preset_change(self, event=None):
+    """Shows or hides custom options based on preset selection."""
+    if self.preset.get() == "Preset3: Custom":
+      self.custom_opts_frame.pack(side=tk.LEFT, padx=(10, 0))
+    else:
+      self.custom_opts_frame.pack_forget()
 
 
   #############################################################################
@@ -396,7 +441,50 @@ class VideoProcessor:
 
     preset_choice = self.preset.get()
 
-    if preset_choice == "Preset2: Fast":
+    if preset_choice == "Preset3: Custom":
+      try:
+        crf_val = str(min(max(int(self.crf.get()), 10), 51))
+      except ValueError:
+        crf_val = DFLT_CRF
+        self.crf.set(crf_val)
+
+      try:
+        vf_scale_val = min(max(float(self.vf_scale.get()), 0.25), 1.0)
+      except ValueError:
+        vf_scale_val = DFLT_VF_SCALE
+        self.vf_scale.set(str(vf_scale_val))
+
+      audio_br = self.audio_bitrate.get()
+      if not audio_br:
+        audio_br = DFLT_AUDIO_BITRATE
+        self.audio_bitrate.set(audio_br)
+
+      ffmpeg_command = [
+        str(self.ffmpeg_path.get()),
+        # General options
+        "-i", src_file_path,
+        # Filter options
+        "-vf", f"scale=iw*{vf_scale_val}:-2",
+        "-pix_fmt", "yuv420p",
+        "-preset", "fast",
+        # Video options
+        "-c:v", "libx264",
+        "-crf", crf_val,
+        "-cpu-used", "8",
+        # Audio options
+        "-c:a", audio_codec,
+        "-b:a", audio_br,
+        # Output options
+        dst_file_path,
+        "-y",  # Force overwrite output file
+        # Progress reporting
+        "-progress", "pipe:1",
+        "-nostats",
+        # Logging options
+        "-hide_banner",
+        "-loglevel", "error",
+      ]
+    elif preset_choice == "Preset2: Fast":
       ffmpeg_command = [
         str(self.ffmpeg_path.get()),
         # General options
@@ -457,11 +545,12 @@ class VideoProcessor:
       # If tempo is not 1, we need to adjust both video and audio streams
       # For video files we need to use tempo value for audio stream and PTS=1/tempo for video
       PTS = 1 / self.tempo.get() # PTS is 1/tempo
+      current_scale = ffmpeg_command[4]
       ffmpeg_tempo_params = [
-        "-filter:v", f"setpts={PTS:.8f}*PTS,scale=640:360",
+        "-filter:v", f"setpts={PTS:.8f}*PTS,{current_scale}",
         "-filter:a", f"atempo={self.tempo.get()}",  # tempo audio filter
       ]
-      # Replace ["-vf", "scale=640:360"], use single combined video filter
+      # Replace ["-vf", current_scale], use single combined video filter
       # Cmd example:
       # ffmpeg.exe -i i.mp4 -filter:v setpts=0.66666667*PTS,scale=640:360 -filter:a atempo=1.5 -vf scale=640:360 -pix_fmt yuv420p -c:v libaom-av1 -b:v 70k -crf 30 -cpu-used 8 -row-mt 1 -g 240 -aq-mode 0 -c:a aac -b:a 80k o.mp4 -y -progress pipe:1 -nostats -hide_banner -loglevel error
       ffmpeg_command[3:5] = ffmpeg_tempo_params
@@ -588,7 +677,6 @@ class VideoProcessor:
           self.master.after(100, self.finish_processing)
         except tk.TclError:
           logging.debug("GUI already closed, skipping final progress update")
-
 
 
   #############################################################################
@@ -1057,6 +1145,42 @@ class VideoProcessor:
     """Handles tempo entry focus out event, validating the input."""
     if not self.validate_tempo():
       self.tempo.set(DFLT_TEMPO)  # Reset to default if invalid
+
+
+  #############################################################################
+  def on_crf_focusout(self, event):
+    """Handles crf entry focus out event, validating the input."""
+    try:
+      crf_val = int(self.crf.get())
+      if crf_val < 10 or crf_val > 51:
+        messagebox.showerror("Invalid CRF", "CRF must be between 10 and 51.")
+        self.crf.set(str(DFLT_CRF))
+    except ValueError:
+      messagebox.showerror("Invalid CRF", "Please enter a valid integer for CRF.")
+      self.crf.set(str(DFLT_CRF))
+
+
+  #############################################################################
+  def on_vf_scale_focusout(self, event):
+    """Handles vf_scale entry focus out event, validating the input."""
+    try:
+      vf_scale_val = float(self.vf_scale.get())
+      if vf_scale_val < 0.25 or vf_scale_val > 1.0:
+        messagebox.showerror("Invalid VF Scale", "VF Scale must be between 0.25 and 1.0.")
+        self.vf_scale.set(str(DFLT_VF_SCALE))
+    except ValueError:
+      messagebox.showerror("Invalid VF Scale", "Please enter a valid number for VF Scale.")
+      self.vf_scale.set(str(DFLT_VF_SCALE))
+
+
+  #############################################################################
+  def on_audio_bitrate_focusout(self, event):
+    """Handles audio_bitrate entry focus out event, validating the input."""
+    import re
+    val = self.audio_bitrate.get()
+    if not val or not re.match(r'^\d+[kKmM]$', val):
+      messagebox.showerror("Invalid Audio Bitrate", "Please enter a valid audio bitrate (e.g., 64k, 1M).")
+      self.audio_bitrate.set(DFLT_AUDIO_BITRATE)
 
 
   #############################################################################
