@@ -25,6 +25,7 @@ DFLT_CONFIG_FILE = "video_processor_config.ini"
 DFLT_LOG_FILE = "video_processor.log"
 VID_EXT = ('.mp4', '.mkv', 'avi', '.webm', '.flv', '.wmv')
 DFLT_OVERWRITE_OPTION = "Skip existing files"  # Skip by default
+DFLT_PRESET = "Preset1: Slow"
 GUI_TIMEOUT = 0.3 # in seconds
 UPDATE_STATUS_TIMEOUT = 1 # in seconds
 
@@ -116,6 +117,7 @@ class VideoProcessor:
     # Pre-define elements\variables (to avoid linter warnings and errors)
     self.run_button = None
     self.overwrite_options = tk.StringVar(value=DFLT_OVERWRITE_OPTION)
+    self.preset = tk.StringVar(value=DFLT_PRESET)
 
     # Initialize GUI variables as empty
     self.ffmpeg_path = tk.StringVar()
@@ -198,6 +200,7 @@ class VideoProcessor:
         self.dst_dir.set(self.config['DEFAULT'].get('dst_dir', DFLT_DST_DIR))
         self.n_threads.set(int(self.config['DEFAULT'].get('n_threads', str(DFLT_N_THREADS))))
         self.overwrite_options.set(self.config['DEFAULT'].get('overwrite_option', DFLT_OVERWRITE_OPTION))
+        self.preset.set(self.config['DEFAULT'].get('preset', DFLT_PRESET))
       except Exception as e:
         messagebox.showerror("Config Error", f"Could not load config file: {e}")
 
@@ -215,6 +218,7 @@ class VideoProcessor:
     self.config['DEFAULT']['src_dir'] = self.src_dir.get()
     self.config['DEFAULT']['dst_dir'] = self.dst_dir.get()
     self.config['DEFAULT']['overwrite_option'] = self.overwrite_options.get()
+    self.config['DEFAULT']['preset'] = self.preset.get()
     try:
       with open(DFLT_CONFIG_FILE, 'w') as configfile:
         self.config.write(configfile)
@@ -252,6 +256,14 @@ class VideoProcessor:
       values=[ "Skip existing files", "Overwrite existing files", "Rename existing files"],
       state="readonly")
     self.overwrite_options_combobox.grid(row=4, column=1, sticky=tk.W)
+
+    # Preset choice
+    ttk.Label(self.master, text="Encoding Preset:").grid(row=5, column=0, sticky=tk.W, padx=5)
+    self.preset_combobox = ttk.Combobox(self.master,
+      textvariable=self.preset,
+      values=["Preset1: Slow", "Preset2: Fast"],
+      state="readonly")
+    self.preset_combobox.grid(row=5, column=1, sticky=tk.W)
 
     # Run button
     self.run_button = tk.Button(self.master, text="Run", command=self.start_processing, state=tk.NORMAL, height=2, width=20)
@@ -382,36 +394,64 @@ class VideoProcessor:
     # WebM requires Vorbis or Opus audio; use Opus by default
     audio_codec = "libopus" if ext_lower == ".webm" else "aac"
 
-    # Cmd example:
-    # ffmpeg.exe -i i.mp4 -filter:v setpts=0.66666667*PTS,scale=640:360 -filter:a atempo=1.5 -vf scale=640:360 -pix_fmt yuv420p -c:v libaom-av1 -b:v 70k -crf 30 -cpu-used 8 -row-mt 1 -g 240 -aq-mode 0 -c:a aac -b:a 80k o.mp4 -y -progress pipe:1 -nostats -hide_banner -loglevel error
-    ffmpeg_command = [
-      str(self.ffmpeg_path.get()),
-      # General options
-      "-i", src_file_path,
-      # Filter options
-      "-vf", "scale=640:360",
-      "-pix_fmt", "yuv420p",
-      # Video options
-      "-c:v", "libaom-av1",
-      "-b:v", "70k",
-      "-crf", "30",
-      "-cpu-used", "8",
-      "-row-mt", "1",
-      "-g", "240",
-      "-aq-mode", "0",
-      # Audio options
-      "-c:a", audio_codec,
-      "-b:a", "80k",
-      # Output options
-      dst_file_path,
-      "-y",  # Force overwrite output file
-      # Progress reporting
-      "-progress", "pipe:1", # Pipe progress to stdout
-      "-nostats", # Disable default stats output
-      # Logging options
-      "-hide_banner",
-      "-loglevel", "error",
-    ]
+    preset_choice = self.preset.get()
+
+    if preset_choice == "Preset2: Fast":
+      ffmpeg_command = [
+        str(self.ffmpeg_path.get()),
+        # General options
+        "-i", src_file_path,
+        # Filter options
+        "-vf", "scale=iw*0.5:-2",
+        "-pix_fmt", "yuv420p",
+        "-preset", "fast",
+        # Video options
+        "-c:v", "libx264",
+        "-crf", "25",
+        "-cpu-used", "8",
+        # Audio options
+        "-c:a", audio_codec,
+        "-b:a", "64k",
+        # Output options
+        dst_file_path,
+        "-y",  # Force overwrite output file
+        # Progress reporting
+        "-progress", "pipe:1",
+        "-nostats",
+        # Logging options
+        "-hide_banner",
+        "-loglevel", "error",
+      ]
+    else:
+      # Default to Preset1: Slow
+      ffmpeg_command = [
+        str(self.ffmpeg_path.get()),
+        # General options
+        "-i", src_file_path,
+        # Filter options
+        "-vf", "scale=640:360",
+        "-pix_fmt", "yuv420p",
+        # Video options
+        "-c:v", "libaom-av1",
+        "-b:v", "70k",
+        "-crf", "30",
+        "-cpu-used", "8",
+        "-row-mt", "1",
+        "-g", "240",
+        "-aq-mode", "0",
+        # Audio options
+        "-c:a", audio_codec,
+        "-b:a", "80k",
+        # Output options
+        dst_file_path,
+        "-y",  # Force overwrite output file
+        # Progress reporting
+        "-progress", "pipe:1", # Pipe progress to stdout
+        "-nostats", # Disable default stats output
+        # Logging options
+        "-hide_banner",
+        "-loglevel", "error",
+      ]
 
     if self.tempo.get() != 1.0:
       # If tempo is not 1, we need to adjust both video and audio streams
