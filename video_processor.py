@@ -30,6 +30,14 @@ DFLT_CRF = 23
 DFLT_VF_SCALE = 0.5
 DFLT_AUDIO_BITRATE = "64k"
 DFLT_CUSTOM_PRESET = "fast"
+
+# MIN/MAX values for custom parameters
+MIN_CRF = 10
+MAX_CRF = 51
+MIN_VF_SCALE = 0.25
+MAX_VF_SCALE = 1.0
+MIN_TEMPO = 0.1
+MAX_TEMPO = 2.0
 GUI_TIMEOUT = 0.3 # in seconds
 UPDATE_STATUS_TIMEOUT = 1 # in seconds
 
@@ -210,7 +218,7 @@ class VideoProcessor:
 
         try:
           tempo_val = float(self.config['DEFAULT'].get('tempo', str(DFLT_TEMPO)))
-          if tempo_val <= 0 or tempo_val > 2:
+          if tempo_val <= MIN_TEMPO or tempo_val > MAX_TEMPO:
             tempo_val = DFLT_TEMPO
         except ValueError:
           tempo_val = DFLT_TEMPO
@@ -226,7 +234,7 @@ class VideoProcessor:
 
         try:
           crf_val = int(self.config['DEFAULT'].get('crf', str(DFLT_CRF)))
-          if crf_val < 10 or crf_val > 51:
+          if crf_val < MIN_CRF or crf_val > MAX_CRF:
             crf_val = DFLT_CRF
         except ValueError:
           crf_val = DFLT_CRF
@@ -234,7 +242,7 @@ class VideoProcessor:
 
         try:
           vf_scale_val = float(self.config['DEFAULT'].get('vf_scale', str(DFLT_VF_SCALE)))
-          if vf_scale_val < 0.25 or vf_scale_val > 1.0:
+          if vf_scale_val < MIN_VF_SCALE or vf_scale_val > MAX_VF_SCALE:
             vf_scale_val = DFLT_VF_SCALE
         except ValueError:
           vf_scale_val = DFLT_VF_SCALE
@@ -492,13 +500,13 @@ class VideoProcessor:
 
     if preset_choice == "Preset3: Custom":
       try:
-        crf_val = str(min(max(int(self.crf.get()), 10), 51))
+        crf_val = str(min(max(int(self.crf.get()), MIN_CRF), MAX_CRF))
       except ValueError:
         crf_val = DFLT_CRF
         self.crf.set(crf_val)
 
       try:
-        vf_scale_val = min(max(float(self.vf_scale.get()), 0.25), 1.0)
+        vf_scale_val = min(max(float(self.vf_scale.get()), MIN_VF_SCALE), MAX_VF_SCALE)
       except ValueError:
         vf_scale_val = DFLT_VF_SCALE
         self.vf_scale.set(str(vf_scale_val))
@@ -1185,8 +1193,8 @@ class VideoProcessor:
     """Validates the tempo value."""
     try:
       tempo = float(self.tempo.get())
-      if tempo <= 0 or tempo > 2:
-        messagebox.showerror("Invalid Tempo", "Tempo must be greater than 0 and less than 2.")
+      if tempo <= MIN_TEMPO or tempo > MAX_TEMPO:
+        messagebox.showerror("Invalid Tempo", f"Tempo must be greater than {MIN_TEMPO} and less than or equal to {MAX_TEMPO}.")
         return False
       return True
     except ValueError:
@@ -1206,8 +1214,8 @@ class VideoProcessor:
     """Handles crf entry focus out event, validating the input."""
     try:
       crf_val = int(self.crf.get())
-      if crf_val < 10 or crf_val > 51:
-        messagebox.showerror("Invalid CRF", "CRF must be between 10 and 51.")
+      if crf_val < MIN_CRF or crf_val > MAX_CRF:
+        messagebox.showerror("Invalid CRF", f"CRF must be between {MIN_CRF} and {MAX_CRF}.")
         self.crf.set(str(DFLT_CRF))
     except ValueError:
       messagebox.showerror("Invalid CRF", "Please enter a valid integer for CRF.")
@@ -1219,8 +1227,8 @@ class VideoProcessor:
     """Handles vf_scale entry focus out event, validating the input."""
     try:
       vf_scale_val = float(self.vf_scale.get())
-      if vf_scale_val < 0.25 or vf_scale_val > 1.0:
-        messagebox.showerror("Invalid VF Scale", "VF Scale must be between 0.25 and 1.0.")
+      if vf_scale_val < MIN_VF_SCALE or vf_scale_val > MAX_VF_SCALE:
+        messagebox.showerror("Invalid VF Scale", f"VF Scale must be between {MIN_VF_SCALE} and {MAX_VF_SCALE}.")
         self.vf_scale.set(str(DFLT_VF_SCALE))
     except ValueError:
       messagebox.showerror("Invalid VF Scale", "Please enter a valid number for VF Scale.")
