@@ -203,16 +203,54 @@ class VideoProcessor:
       try:
         # Set the values using the loaded configuration or defaults
         self.ffmpeg_path.set(self.config['DEFAULT'].get('ffmpeg_path', DFLT_FFMPEG_PATH))
-        self.tempo.set(float(self.config['DEFAULT'].get('tempo', str(DFLT_TEMPO))))
         self.src_dir.set(self.config['DEFAULT'].get('src_dir', DFLT_SRC_DIR))
         self.dst_dir.set(self.config['DEFAULT'].get('dst_dir', DFLT_DST_DIR))
-        self.n_threads.set(int(self.config['DEFAULT'].get('n_threads', str(DFLT_N_THREADS))))
         self.overwrite_options.set(self.config['DEFAULT'].get('overwrite_option', DFLT_OVERWRITE_OPTION))
         self.preset.set(self.config['DEFAULT'].get('preset', DFLT_PRESET))
-        self.crf.set(self.config['DEFAULT'].get('crf', str(DFLT_CRF)))
-        self.vf_scale.set(self.config['DEFAULT'].get('vf_scale', str(DFLT_VF_SCALE)))
-        self.audio_bitrate.set(self.config['DEFAULT'].get('audio_bitrate', DFLT_AUDIO_BITRATE))
-        self.custom_preset.set(self.config['DEFAULT'].get('custom_preset', DFLT_CUSTOM_PRESET))
+
+        try:
+          tempo_val = float(self.config['DEFAULT'].get('tempo', str(DFLT_TEMPO)))
+          if tempo_val <= 0 or tempo_val > 2:
+            tempo_val = DFLT_TEMPO
+        except ValueError:
+          tempo_val = DFLT_TEMPO
+        self.tempo.set(tempo_val)
+
+        try:
+          n_threads_val = int(self.config['DEFAULT'].get('n_threads', str(DFLT_N_THREADS)))
+          if n_threads_val < 1 or n_threads_val > DFLT_N_THREADS_MAX:
+             n_threads_val = DFLT_N_THREADS
+        except ValueError:
+          n_threads_val = DFLT_N_THREADS
+        self.n_threads.set(n_threads_val)
+
+        try:
+          crf_val = int(self.config['DEFAULT'].get('crf', str(DFLT_CRF)))
+          if crf_val < 10 or crf_val > 51:
+            crf_val = DFLT_CRF
+        except ValueError:
+          crf_val = DFLT_CRF
+        self.crf.set(str(crf_val))
+
+        try:
+          vf_scale_val = float(self.config['DEFAULT'].get('vf_scale', str(DFLT_VF_SCALE)))
+          if vf_scale_val < 0.25 or vf_scale_val > 1.0:
+            vf_scale_val = DFLT_VF_SCALE
+        except ValueError:
+          vf_scale_val = DFLT_VF_SCALE
+        self.vf_scale.set(str(vf_scale_val))
+
+        import re
+        ab_val = self.config['DEFAULT'].get('audio_bitrate', DFLT_AUDIO_BITRATE)
+        if not ab_val or not re.match(r'^\d+[kKmM]$', ab_val):
+          ab_val = DFLT_AUDIO_BITRATE
+        self.audio_bitrate.set(ab_val)
+
+        cp_val = self.config['DEFAULT'].get('custom_preset', DFLT_CUSTOM_PRESET)
+        valid_presets = ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow", "placebo"]
+        if cp_val not in valid_presets:
+          cp_val = DFLT_CUSTOM_PRESET
+        self.custom_preset.set(cp_val)
       except Exception as e:
         messagebox.showerror("Config Error", f"Could not load config file: {e}")
 
