@@ -29,6 +29,7 @@ DFLT_PRESET = "Preset1: Slow"
 DFLT_CRF = 23
 DFLT_VF_SCALE = 0.5
 DFLT_AUDIO_BITRATE = "64k"
+DFLT_CUSTOM_PRESET = "fast"
 GUI_TIMEOUT = 0.3 # in seconds
 UPDATE_STATUS_TIMEOUT = 1 # in seconds
 
@@ -124,6 +125,7 @@ class VideoProcessor:
     self.crf = tk.StringVar(value=str(DFLT_CRF))
     self.vf_scale = tk.StringVar(value=str(DFLT_VF_SCALE))
     self.audio_bitrate = tk.StringVar(value=DFLT_AUDIO_BITRATE)
+    self.custom_preset = tk.StringVar(value=DFLT_CUSTOM_PRESET)
 
     # Initialize GUI variables as empty
     self.ffmpeg_path = tk.StringVar()
@@ -210,6 +212,7 @@ class VideoProcessor:
         self.crf.set(self.config['DEFAULT'].get('crf', str(DFLT_CRF)))
         self.vf_scale.set(self.config['DEFAULT'].get('vf_scale', str(DFLT_VF_SCALE)))
         self.audio_bitrate.set(self.config['DEFAULT'].get('audio_bitrate', DFLT_AUDIO_BITRATE))
+        self.custom_preset.set(self.config['DEFAULT'].get('custom_preset', DFLT_CUSTOM_PRESET))
       except Exception as e:
         messagebox.showerror("Config Error", f"Could not load config file: {e}")
 
@@ -231,6 +234,7 @@ class VideoProcessor:
     self.config['DEFAULT']['crf'] = self.crf.get()
     self.config['DEFAULT']['vf_scale'] = self.vf_scale.get()
     self.config['DEFAULT']['audio_bitrate'] = self.audio_bitrate.get()
+    self.config['DEFAULT']['custom_preset'] = self.custom_preset.get()
     try:
       with open(DFLT_CONFIG_FILE, 'w') as configfile:
         self.config.write(configfile)
@@ -283,6 +287,13 @@ class VideoProcessor:
 
     self.custom_opts_frame = ttk.Frame(preset_frame)
     self.custom_opts_frame.pack(side=tk.LEFT, padx=(10, 0))
+
+    ttk.Label(self.custom_opts_frame, text="FFMPEG Preset:").pack(side=tk.LEFT, padx=(0, 2))
+    self.custom_preset_combobox = ttk.Combobox(self.custom_opts_frame,
+      textvariable=self.custom_preset,
+      values=["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow", "placebo"],
+      state="readonly", width=9)
+    self.custom_preset_combobox.pack(side=tk.LEFT, padx=(0, 10))
 
     ttk.Label(self.custom_opts_frame, text="CRF:").pack(side=tk.LEFT, padx=(0, 2))
     self.crf_entry = ttk.Entry(self.custom_opts_frame, textvariable=self.crf, width=4)
@@ -459,6 +470,11 @@ class VideoProcessor:
         audio_br = DFLT_AUDIO_BITRATE
         self.audio_bitrate.set(audio_br)
 
+      custom_preset_val = self.custom_preset.get()
+      if not custom_preset_val:
+        custom_preset_val = DFLT_CUSTOM_PRESET
+        self.custom_preset.set(custom_preset_val)
+
       ffmpeg_command = [
         str(self.ffmpeg_path.get()),
         # General options
@@ -466,7 +482,7 @@ class VideoProcessor:
         # Filter options
         "-vf", f"scale=iw*{vf_scale_val}:-2",
         "-pix_fmt", "yuv420p",
-        "-preset", "fast",
+        "-preset", custom_preset_val,
         # Video options
         "-c:v", "libx264",
         "-crf", crf_val,
