@@ -341,7 +341,7 @@ class VideoProcessor:
       state="readonly", width=9)
     self.custom_preset_combobox.pack(side=tk.LEFT, padx=(0, 10))
 
-    ttk.Label(self.custom_opts_frame, text="CRF:").pack(side=tk.LEFT, padx=(0, 2))
+    ttk.Label(self.custom_opts_frame, text="Constant Rate Factor (CRF):").pack(side=tk.LEFT, padx=(0, 2))
     self.crf_entry = ttk.Entry(self.custom_opts_frame, textvariable=self.crf, width=4)
     self.crf_entry.pack(side=tk.LEFT, padx=(0, 10))
     self.crf_entry.bind('<FocusOut>', self.on_crf_focusout)

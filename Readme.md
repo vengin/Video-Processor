@@ -2,7 +2,7 @@
 
 A Python GUI application for video files batch processing, with compression and tempo (speed) change, to reduce file size. The application uses FFmpeg (and FFprobe) for video processing in multi-threading mode and supports multiple video formats.
 
-![Audio Tempo Changer Screenshot](./docs/Video-Compression-Processor(GUI).png)
+![Video Compression Processor GUI](./docs/Video-Compression-Processor(GUI).png)
 
 ## Features
 
@@ -44,13 +44,14 @@ The application saves its configuration in `video_processor_config.ini` file, wh
 1. Set the FFmpeg path (first time only)
 2. Select source directory containing video files
 3. Select destination directory for processed files
-4. Adjust tempo value (0-2, where 1 is normal speed)
+4. Adjust tempo value (0.1-2.0, where 1.0 is normal speed)
 5. Choose number of processing threads (1-DFLT_N_THREADS_MAX)
 6. Select file overwrite behavior:
    - Skip existing files
    - Overwrite existing files
    - Rename existing files
-7. Click "Run" to start processing
+7. Select Encoding Preset (Slow, Fast, or Custom)
+8. Click "Run" to start processing
 
 ## Interaction
 
@@ -65,10 +66,14 @@ The application saves its configuration in `video_processor_config.ini` file, wh
 
 ## Processing Options
 
-- **Tempo**: Value between 0 and 2
-  - < 1: Slower playback
-  - 1: Normal speed
-  - \> 1: Faster playback
+- **Encoding Presets**:
+  - **Preset1: Slow**: High efficiency AV1 encoding (`libaom-av1`, CRF 30) configured for smaller file sizes.
+  - **Preset2: Fast**: Faster H.264 encoding (`libx264`, fast preset, CRF 25) configured for speed.
+  - **Preset3: Custom**: Fully customizable H.264 encoding where you can change core FFMPEG options (more details in [Preset3: Custom](#preset3-custom)).
+- **Tempo**: Value between 0.1 and 2.0
+  - < 1.0: Slower playback
+  - 1.0: Normal speed
+  - \> 1.0: Faster playback
 - **Threads**: 1-DFLT_N_THREADS_MAX concurrent processing threads
 - **Overwrite Options**:
   - Skip: Preserve existing files
@@ -131,3 +136,12 @@ ffmpeg_command[3:5] = ffmpeg_tempo_params
 ## Logging
 
 The application logs processing details and errors to `video_processor.log` file ('INFO' or 'DEBUG' modes).
+
+## Preset3: Custom
+
+**Preset3: Custom**: Fully customizable H.264 encoding where you can chose the core FFMPEG options:
+- **-preset** option: from `ultrafast` to `placebo`)
+- **Constant Rate Factor (CRF)**: range 10-51
+- **Video Filter (VF) Scale**: range 0.25-1.0
+- **Audio Bitrate (-b:a)**: e.g. 64k, 96K, 1M
+![Video Compression Processor - Preset3: Custom](./docs/Video-Compression-Processor_Preset3-Custom(GUI).png)
