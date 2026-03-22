@@ -82,7 +82,7 @@ The application saves its configuration in `video_processor_config.ini` file, wh
 
 ## FFMPEG parameters
 
-The FFMPEG command used for **compression (without tempo)** is the following:
+The FFMPEG command used for **Preset1: Slow compression (without tempo)** is the following:
 
 ```
 # Cmd example:
@@ -98,7 +98,6 @@ ffmpeg_command = [
   "-c:v", "libaom-av1",           # Video codec: AV1
   "-b:v", "70k",                  # Video bitrate
   "-crf", "30",                   # Constant Rate Factor (quality)
-  "-cpu-used", "8",               # CPU usage for encoding speed
   "-row-mt", "1",                 # Enable row-based multithreading
   "-g", "240",                    # Group of pictures (GOP) size
   "-aq-mode", "0",                # Adaptive quantization mode
@@ -140,7 +139,8 @@ The application logs processing details and errors to `video_processor.log` file
 ## Preset3: Custom
 
 **Preset3: Custom**: Fully customizable H.264 encoding where you can chose the core FFMPEG options:
-- **-preset** option: from `ultrafast` to `placebo`)
+- **-preset** option: from `ultrafast` to `placebo`
+- **-tune** option (optional): `film`, `animation`, `grain`, `stillimage`, `psnr`, `ssim`, `fastdecode`, `zerolatency`
 - **Constant Rate Factor (CRF)**: range 10-51
 - **Video Filter (VF) Scale**: range 0.25-1.0
 - **Audio Bitrate (-b:a)**: e.g. 64k, 96K, 1M
