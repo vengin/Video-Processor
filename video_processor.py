@@ -30,6 +30,8 @@ DFLT_CRF = 23
 DFLT_VF_SCALE = 0.5
 DFLT_AUDIO_BITRATE = "64k"
 DFLT_CUSTOM_PRESET = "fast"
+DFLT_TUNE_ENABLED = False
+DFLT_CUSTOM_TUNE = "film"
 
 # MIN/MAX values for custom parameters
 MIN_CRF = 10
@@ -134,6 +136,8 @@ class VideoProcessor:
     self.vf_scale = tk.StringVar(value=str(DFLT_VF_SCALE))
     self.audio_bitrate = tk.StringVar(value=DFLT_AUDIO_BITRATE)
     self.custom_preset = tk.StringVar(value=DFLT_CUSTOM_PRESET)
+    self.tune_enabled = tk.BooleanVar(value=DFLT_TUNE_ENABLED)
+    self.custom_tune = tk.StringVar(value=DFLT_CUSTOM_TUNE)
 
     # Initialize GUI variables as empty
     self.ffmpeg_path = tk.StringVar()
@@ -259,6 +263,15 @@ class VideoProcessor:
         if cp_val not in valid_presets:
           cp_val = DFLT_CUSTOM_PRESET
         self.custom_preset.set(cp_val)
+
+        tune_en_val = self.config['DEFAULT'].getboolean('tune_enabled', DFLT_TUNE_ENABLED)
+        self.tune_enabled.set(tune_en_val)
+
+        ct_val = self.config['DEFAULT'].get('custom_tune', DFLT_CUSTOM_TUNE)
+        valid_tunes = ["film", "animation", "grain", "stillimage", "psnr", "ssim", "fastdecode", "zerolatency"]
+        if ct_val not in valid_tunes:
+          ct_val = DFLT_CUSTOM_TUNE
+        self.custom_tune.set(ct_val)
       except Exception as e:
         messagebox.showerror("Config Error", f"Could not load config file: {e}")
 
@@ -281,6 +294,8 @@ class VideoProcessor:
     self.config['DEFAULT']['vf_scale'] = self.vf_scale.get()
     self.config['DEFAULT']['audio_bitrate'] = self.audio_bitrate.get()
     self.config['DEFAULT']['custom_preset'] = self.custom_preset.get()
+    self.config['DEFAULT']['tune_enabled'] = str(self.tune_enabled.get())
+    self.config['DEFAULT']['custom_tune'] = self.custom_tune.get()
     try:
       with open(DFLT_CONFIG_FILE, 'w') as configfile:
         self.config.write(configfile)
@@ -340,6 +355,16 @@ class VideoProcessor:
       values=["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow", "placebo"],
       state="readonly", width=9)
     self.custom_preset_combobox.pack(side=tk.LEFT, padx=(0, 10))
+
+    self.tune_checkbox = ttk.Checkbutton(self.custom_opts_frame, text="-tune", variable=self.tune_enabled, command=self.on_tune_toggle)
+    self.tune_checkbox.pack(side=tk.LEFT, padx=(0, 2))
+
+    self.custom_tune_combobox = ttk.Combobox(self.custom_opts_frame,
+      textvariable=self.custom_tune,
+      values=["film", "animation", "grain", "stillimage", "psnr", "ssim", "fastdecode", "zerolatency"],
+      state="readonly", width=11)
+    self.custom_tune_combobox.pack(side=tk.LEFT, padx=(0, 10))
+    self.on_tune_toggle()
 
     ttk.Label(self.custom_opts_frame, text="Constant Rate Factor (CRF):").pack(side=tk.LEFT, padx=(0, 2))
     self.crf_entry = ttk.Entry(self.custom_opts_frame, textvariable=self.crf, width=4)
@@ -401,6 +426,15 @@ class VideoProcessor:
       self.custom_opts_frame.pack(side=tk.LEFT, padx=(10, 0))
     else:
       self.custom_opts_frame.pack_forget()
+
+
+  #############################################################################
+  def on_tune_toggle(self, event=None):
+    """Enables or disables custom tune options based on checkbox."""
+    if self.tune_enabled.get():
+      self.custom_tune_combobox.config(state="readonly")
+    else:
+      self.custom_tune_combobox.config(state="disabled")
 
 
   #############################################################################
@@ -521,6 +555,11 @@ class VideoProcessor:
         custom_preset_val = DFLT_CUSTOM_PRESET
         self.custom_preset.set(custom_preset_val)
 
+      custom_tune_val = self.custom_tune.get()
+      if not custom_tune_val:
+        custom_tune_val = DFLT_CUSTOM_TUNE
+        self.custom_tune.set(custom_tune_val)
+
       ffmpeg_command = [
         str(self.ffmpeg_path.get()),
         # General options
@@ -532,7 +571,7 @@ class VideoProcessor:
         # Video options
         "-c:v", "libx264",
         "-crf", crf_val,
-        "-cpu-used", "8",
+#        "-cpu-used", "8",
         # Audio options
         "-c:a", audio_codec,
         "-b:a", audio_br,
@@ -546,6 +585,12 @@ class VideoProcessor:
         "-hide_banner",
         "-loglevel", "error",
       ]
+
+      if self.tune_enabled.get():
+        idx = ffmpeg_command.index("-c:v")
+        ffmpeg_command.insert(idx, "-tune")
+        ffmpeg_command.insert(idx + 1, custom_tune_val)
+
     elif preset_choice == "Preset2: Fast":
       ffmpeg_command = [
         str(self.ffmpeg_path.get()),
@@ -557,8 +602,9 @@ class VideoProcessor:
         "-preset", "fast",
         # Video options
         "-c:v", "libx264",
+        "-tune", "film",
         "-crf", "25",
-        "-cpu-used", "8",
+#        "-cpu-used", "8",
         # Audio options
         "-c:a", audio_codec,
         "-b:a", "64k",
@@ -585,7 +631,7 @@ class VideoProcessor:
         "-c:v", "libaom-av1",
         "-b:v", "70k",
         "-crf", "30",
-        "-cpu-used", "8",
+#        "-cpu-used", "8",
         "-row-mt", "1",
         "-g", "240",
         "-aq-mode", "0",
