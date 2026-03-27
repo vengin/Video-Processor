@@ -42,6 +42,7 @@ MIN_TEMPO = 0.1
 MAX_TEMPO = 2.0
 GUI_TIMEOUT = 0.3 # in seconds
 UPDATE_STATUS_TIMEOUT = 1 # in seconds
+THREAD_PROGRESS_TIMEOUT = 15  # seconds
 
 
 #############################################################################
@@ -685,6 +686,9 @@ class VideoProcessor:
     stdout_thread.daemon = True
     stdout_thread.start()
 
+    last_change_time = time.time()
+    last_processed_us = -1
+
     try:
       while True:
         try:
@@ -715,6 +719,10 @@ class VideoProcessor:
                 continue
               try:
                 processed_us = int(parts[1])
+                if processed_us != last_processed_us:
+                  last_processed_us = processed_us
+                  last_change_time = time.time()
+
                 processed_seconds = processed_us / 1_000_000.0
 
                 with self.processed_seconds_arr_lock:
@@ -733,8 +741,18 @@ class VideoProcessor:
             break
           time.sleep(GUI_TIMEOUT)
 
+        # Check for timeout
+        if time.time() - last_change_time > THREAD_PROGRESS_TIMEOUT:
+          msg = f"Error: Processing timeout for {relative_path}. No progress for {THREAD_PROGRESS_TIMEOUT} seconds."
+          logging.error(msg)
+          self.status_update_queue.put(msg)
+          process.kill()
+          progress_bar.cancelled.set(True)
+          raise TimeoutError(msg)
+
     except Exception as e:
       logging.exception(f"Error monitoring progress for {relative_path}: {e}")
+      raise
     finally:
       # Check if the process was cancelled
       if not progress_bar.cancelled.get():
@@ -1001,7 +1019,7 @@ class VideoProcessor:
           self.status_update_queue.put(msg)
           logging.exception(msg)
         self.queue.task_done()  # Ensure task is marked as done even on error
-        break
+        continue
 
     with threading.Lock():  # Use a lock to safely decrement active_threads
       self.active_threads -= 1
