@@ -1338,9 +1338,14 @@ class VideoProcessor:
       filename = progress_bar.filename_var.get()
       try:
         p = psutil.Process(pid)
-        p.suspend()
-        progress_bar.paused.set(True)
-        progress_bar.draw_progress_bar()
+
+        # Check current pause state to avoid double-suspending on Windows
+        was_paused = progress_bar.paused.get()
+        if not was_paused:
+          p.suspend()
+          progress_bar.paused.set(True)
+          progress_bar.draw_progress_bar()
+
         if messagebox.askyesno("Cancel Processing?", f"Are you sure you want to Cancel process for {filename}?"):
           try:
             p.kill()
@@ -1380,8 +1385,10 @@ class VideoProcessor:
           # Since a slot is now free, try to start a new task
           self.start_new_task_if_needed()
         else:
-          p.resume()
-          progress_bar.paused.set(False)
+          if not was_paused:
+            p.resume()
+            progress_bar.paused.set(False)
+            progress_bar.draw_progress_bar()
 
       except psutil.NoSuchProcess:
         logging.warning(f"Process with PID {pid} not found for cancellation.")
@@ -1415,7 +1422,7 @@ class VideoProcessor:
       try:
         p = psutil.Process(pid)
         filename = progress_bar.filename_var.get()
-        if p.status() == psutil.STATUS_STOPPED:
+        if progress_bar.paused.get():
           p.resume()
           progress_bar.paused.set(False)
           msg = f"Resumed processing {filename}"
