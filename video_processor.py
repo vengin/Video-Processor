@@ -42,7 +42,7 @@ MIN_TEMPO = 0.1
 MAX_TEMPO = 2.0
 GUI_TIMEOUT = 0.3 # in seconds
 UPDATE_STATUS_TIMEOUT = 1 # in seconds
-THREAD_PROGRESS_TIMEOUT = 15  # seconds
+THREAD_PROGRESS_TIMEOUT = 10  # seconds
 
 
 #############################################################################
@@ -814,6 +814,7 @@ class VideoProcessor:
 
     self.processed_files_set.add(relative_path)
     process = None  # Define process outside try block
+    dst_file_path = None
     try:
       # if dst_file_path is None:  # Skip file
       if self.file_info[relative_path]["skipped"]:
@@ -827,7 +828,7 @@ class VideoProcessor:
 
 
       # Add the actual destination file path to the set
-      self.processed_dst_files_set.add(dst_file_path)
+      self.processed_dst_files_set.add((src_file_path, dst_file_path))
       # Get pre-calculated file info
       file_data = self.file_info[relative_path]
       dst_time = file_data["duration"]
@@ -870,6 +871,24 @@ class VideoProcessor:
       logging.exception(msg)
       self.status_update_queue.put(msg)
       self.error_files += 1
+      
+      # Wait briefly to ensure ffmpeg process has fully terminated and released the file handle
+      if process:
+        try:
+          process.wait(timeout=2.0)
+        except subprocess.TimeoutExpired:
+          pass
+          
+      # Auto-remove the invalid/incomplete output file
+      try:
+        if dst_file_path and os.path.exists(dst_file_path):
+          os.remove(dst_file_path)
+          rm_msg = f"Removed incomplete file: {dst_file_path}"
+          logging.info(rm_msg)
+          self.status_update_queue.put(rm_msg)
+      except Exception as rm_e:
+        logging.warning(f"Failed to remove incomplete file {dst_file_path}: {rm_e}")
+        
       raise
     finally:
       # Ensure process is removed from active processes even if error occurs
@@ -886,12 +905,14 @@ class VideoProcessor:
   def count_dst_files_sz(self):
     """Calculate the actual size of output files after processing."""
     self.total_dst_sz = 0
+    self.total_src_sz = 0
     n_files = 0
 
 
-    for dst_file_path in self.processed_dst_files_set:
-      if os.path.exists(dst_file_path):
+    for src_file_path, dst_file_path in self.processed_dst_files_set:
+      if os.path.exists(dst_file_path) and os.path.exists(src_file_path):
         self.total_dst_sz += os.path.getsize(dst_file_path)
+        self.total_src_sz += os.path.getsize(src_file_path)
         n_files += 1
 
 
@@ -1211,7 +1232,7 @@ class VideoProcessor:
       msg += f" in {processing_time_str}."
     # Add Compression Ratio
     self.count_dst_files_sz()
-    if self.total_dst_sz:
+    if self.processed_files > 0 and self.total_dst_sz > 0 and hasattr(self, 'total_src_sz') and self.total_src_sz > 0:
       msg += f" Compression ratio {(self.total_src_sz / self.total_dst_sz):.2f}."
 
     # Display message
