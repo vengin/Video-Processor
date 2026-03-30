@@ -675,53 +675,69 @@ class VideoProcessor:
     q = queue.Queue()
 
     def read_stdout(p, q):
-      while True:
-        line = p.stdout.readline()
-        if not line:
-          break
-        q.put(line.decode('utf-8', errors='replace'))
-      q.put(None)
+      try:
+        while True:
+          line = p.stdout.readline()
+          if not line:
+            break
+          q.put(('stdout', line.decode('utf-8', errors='replace')))
+      finally:
+        q.put(('stdout', None))
+
+    def read_stderr(p, q):
+      try:
+        while True:
+          line = p.stderr.readline()
+          if not line:
+            break
+          q.put(('stderr', line.decode('utf-8', errors='replace')))
+      finally:
+        q.put(('stderr', None))
 
     stdout_thread = threading.Thread(target=read_stdout, args=(process, q))
     stdout_thread.daemon = True
     stdout_thread.start()
 
+    stderr_thread = threading.Thread(target=read_stderr, args=(process, q))
+    stderr_thread.daemon = True
+    stderr_thread.start()
+
     last_change_time = time.time()
     last_processed_us = -1
+    stdout_done = False
+    stderr_done = False
 
     try:
       while True:
         try:
-          line = q.get(timeout=GUI_TIMEOUT)
+          stream, line = q.get(timeout=GUI_TIMEOUT)
+          
           if line is None:
-            break
-#          logging.debug(f"Progress line: {line.strip()}")
+            if stream == 'stdout': stdout_done = True
+            if stream == 'stderr': stderr_done = True
+            if stdout_done and stderr_done:
+              break
+            continue
 
-          # Example output
-          ########
-          # frame=5
-          # fps=0.00
-          # stream_0_0_q=0.0
-          # bitrate=  56.9kbits/s
-          # total_size=1482
-          # out_time_us=208542
-          # out_time_ms=208542
-          # out_time=00:00:00.208542
-          # dup_frames=0
-          # drop_frames=0
-          # speed=0.407x
-          # progress=continue
-          ########
-          if "out_time_ms=" in line:
+          # Any activity from FFmpeg (stdout or stderr) resets the timeout clock
+          last_change_time = time.time()
+
+          if stream == 'stderr':
+            err_msg = line.strip()
+            if err_msg:
+              logging.error(f"FFMPEG StdErr [{relative_path}]: {err_msg}")
+            continue
+
+          # Process stdout progress lines
+          if "out_time_ms=" in line or "out_time_us=" in line:
             parts = line.strip().split('=')
-            if len(parts) == 2 and parts[0] == 'out_time_ms':
+            if len(parts) == 2 and (parts[0] == 'out_time_ms' or parts[0] == 'out_time_us'):
               if parts[1] == 'N/A':
                 continue
               try:
                 processed_us = int(parts[1])
                 if processed_us != last_processed_us:
                   last_processed_us = processed_us
-                  last_change_time = time.time()
 
                 processed_seconds = processed_us / 1_000_000.0
 
@@ -752,8 +768,11 @@ class VideoProcessor:
           progress_bar.cancelled.set(True)
           raise TimeoutError(msg)
 
+    except TimeoutError:
+      # TimeoutError is already logged/handled before being raised
+      raise
     except Exception as e:
-      logging.exception(f"Error monitoring progress for {relative_path}: {e}")
+      logging.exception(f"Unexpected error monitoring progress for {relative_path}: {e}")
       raise
     finally:
       # Check if the process was cancelled
@@ -763,6 +782,7 @@ class VideoProcessor:
           self.processed_files += 1
       self.master.update_idletasks()
       stdout_thread.join()
+      stderr_thread.join()
     return
 
 
@@ -1040,10 +1060,7 @@ class VideoProcessor:
           break
         continue
       except Exception as e:
-#        if not self.is_shutting_down:
-#          msg = f"Error in worker {thread_index}: {e}"
-#          self.status_update_queue.put(msg)
-#          logging.exception(msg)
+        # Exceptions are already logged in process_file
         self.queue.task_done()  # Ensure task is marked as done even on error
         continue
 
