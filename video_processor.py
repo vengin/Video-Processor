@@ -742,7 +742,9 @@ class VideoProcessor:
           time.sleep(GUI_TIMEOUT)
 
         # Check for timeout
-        if time.time() - last_change_time > THREAD_PROGRESS_TIMEOUT:
+        if getattr(progress_bar, 'paused', None) and progress_bar.paused.get():
+          last_change_time = time.time()
+        elif time.time() - last_change_time > THREAD_PROGRESS_TIMEOUT:
           msg = f"Error: Processing timeout for {relative_path}. No progress for {THREAD_PROGRESS_TIMEOUT} seconds."
           logging.error(msg)
           self.status_update_queue.put(msg)
@@ -871,14 +873,14 @@ class VideoProcessor:
       logging.exception(msg)
       self.status_update_queue.put(msg)
       self.error_files += 1
-      
+
       # Wait briefly to ensure ffmpeg process has fully terminated and released the file handle
       if process:
         try:
           process.wait(timeout=2.0)
         except subprocess.TimeoutExpired:
           pass
-          
+
       # Auto-remove the invalid/incomplete output file
       try:
         if dst_file_path and os.path.exists(dst_file_path):
@@ -888,7 +890,7 @@ class VideoProcessor:
           self.status_update_queue.put(rm_msg)
       except Exception as rm_e:
         logging.warning(f"Failed to remove incomplete file {dst_file_path}: {rm_e}")
-        
+
       raise
     finally:
       # Ensure process is removed from active processes even if error occurs
