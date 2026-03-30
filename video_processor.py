@@ -731,8 +731,8 @@ class VideoProcessor:
                 progress = min(100, (processed_seconds / dst_time) * 100) if dst_time > 0 else 0
                 progress_bar.set_progress(progress)
                 self.master.update_idletasks()
-                self.update_total_progress()
-                logging.debug(f"processed_us={processed_us}, processed_seconds/dst_time = {processed_seconds:.1f}/{dst_time:.1f} = {(processed_seconds / dst_time * 100):.1f}" )
+                self.update_total_progress(relative_path)
+                logging.debug(f"{relative_path}: processed_us={processed_us}, processed_seconds/dst_time = {processed_seconds:.1f}/{dst_time:.1f} = {(processed_seconds / dst_time * 100):.1f}" )
               except (ValueError, IndexError) as e:
                 logging.warning(f"Could not parse progress line: {line.strip()} - {e}")
 
@@ -767,7 +767,7 @@ class VideoProcessor:
 
 
   #############################################################################
-  def update_total_progress(self):
+  def update_total_progress(self, relative_path=None):
     """Updates the total progress bar based on cumulative processed size."""
     if self.is_shutting_down:
       return
@@ -784,7 +784,10 @@ class VideoProcessor:
         total_processed_seconds = sum(self.processed_seconds_arr.values())
       total_progress_percentage = int((total_processed_seconds / self.total_dst_seconds) * 100) if self.total_dst_seconds > 0 else 0
       total_progress_percentage = min(100, total_progress_percentage)
-      logging.debug(f"ttl_prcssd_seconds={int(total_processed_seconds)}, ttl_seconds={int(self.total_dst_seconds)}, prgrss={total_progress_percentage}")
+      if relative_path:
+        logging.debug(f"{relative_path}: ttl_prcssd_seconds={int(total_processed_seconds)}, ttl_seconds={int(self.total_dst_seconds)}, prgrss={total_progress_percentage}")
+      else:
+        logging.debug(f"ttl_prcssd_seconds={int(total_processed_seconds)}, ttl_seconds={int(self.total_dst_seconds)}, prgrss={total_progress_percentage}")
 
       total_progress_message = f"{total_progress_percentage}%  {self.processed_files+self.skipped_files + self.cancelled_files}/{self.total_files}"
 
@@ -900,7 +903,7 @@ class VideoProcessor:
         if progress_bar in self.progress_bar_to_pid:
             del self.progress_bar_to_pid[progress_bar]
       if not self.is_shutting_down:
-        self.update_total_progress() # Update total progress after each file
+        self.update_total_progress(relative_path) # Update total progress after each file
 
 
   #############################################################################
@@ -1037,10 +1040,10 @@ class VideoProcessor:
           break
         continue
       except Exception as e:
-        if not self.is_shutting_down:
-          msg = f"Error in worker {thread_index}: {e}"
-          self.status_update_queue.put(msg)
-          logging.exception(msg)
+#        if not self.is_shutting_down:
+#          msg = f"Error in worker {thread_index}: {e}"
+#          self.status_update_queue.put(msg)
+#          logging.exception(msg)
         self.queue.task_done()  # Ensure task is marked as done even on error
         continue
 
