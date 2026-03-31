@@ -119,6 +119,16 @@ class CustomProgressBar(tk.Canvas):
     self.draw_progress_bar()
 
 
+  #############################################################################
+  def prepare_new_file(self, display_text):
+    """Prepares the progress bar for a new file by resetting its state."""
+    self.filename_var.set(display_text)
+    self.progress_var.set(0)
+    self.paused.set(False)
+    self.cancelled.set(False)
+    self.draw_progress_bar()
+
+
 #############################################################################
 class VideoProcessor:
   """
@@ -856,7 +866,7 @@ class VideoProcessor:
       dst_time = file_data["duration"]
 
       # Display processed filename in progress bar
-      progress_bar.set_display_text(os.path.basename(dst_file_path))
+      progress_bar.prepare_new_file(os.path.basename(dst_file_path))
       progress_bar.relative_path = relative_path
 
       # Generate ffmpeg command for video compression
@@ -1034,10 +1044,8 @@ class VideoProcessor:
         # Reduced timeout to make thread more responsive to shutdown
         file_path, relative_path = self.queue.get(timeout=0.1)
 
-        # Reset progress bar state for the new file
-        progress_bar.cancelled.set(False)
-        progress_bar.paused.set(False)
-        progress_bar.draw_progress_bar()
+        # Reset progress bar state for the new file (filename part will be updated in process_file)
+        # We don't reset progress here, it will be done in process_file along with the brand-new filename.
 
         # Check shutdown flag immediately after getting item
         if file_path is None or self.is_shutting_down:
