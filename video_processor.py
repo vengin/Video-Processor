@@ -42,7 +42,7 @@ MIN_TEMPO = 0.1
 MAX_TEMPO = 2.0
 GUI_TIMEOUT = 0.3 # in seconds
 UPDATE_STATUS_TIMEOUT = 1 # in seconds
-THREAD_PROGRESS_TIMEOUT = 10  # seconds
+THREAD_PROGRESS_TIMEOUT = 300  # seconds
 
 
 #############################################################################
@@ -761,15 +761,12 @@ class VideoProcessor:
         if getattr(progress_bar, 'paused', None) and progress_bar.paused.get():
           last_change_time = time.time()
         elif time.time() - last_change_time > THREAD_PROGRESS_TIMEOUT:
-          msg = f"Error: Processing timeout for {relative_path}. No progress for {THREAD_PROGRESS_TIMEOUT} seconds."
-          logging.error(msg)
-          self.status_update_queue.put(msg)
           process.kill()
           progress_bar.cancelled.set(True)
-          raise TimeoutError(msg)
+          raise TimeoutError(f"Processing timeout. No progress for {THREAD_PROGRESS_TIMEOUT} seconds.")
 
     except TimeoutError:
-      # TimeoutError is already logged/handled before being raised
+      # TimeoutError will be logged/handled by the caller (process_file)
       raise
     except Exception as e:
       logging.exception(f"Unexpected error monitoring progress for {relative_path}: {e}")
