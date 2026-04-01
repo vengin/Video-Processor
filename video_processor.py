@@ -42,7 +42,7 @@ MIN_TEMPO = 0.1
 MAX_TEMPO = 2.0
 GUI_TIMEOUT = 0.3 # in seconds
 UPDATE_STATUS_TIMEOUT = 1 # in seconds
-THREAD_PROGRESS_TIMEOUT = 300  # seconds
+THREAD_PROGRESS_TIMEOUT = 300  # seconds (0 to disable)
 
 
 #############################################################################
@@ -770,7 +770,7 @@ class VideoProcessor:
         # Check for timeout
         if getattr(progress_bar, 'paused', None) and progress_bar.paused.get():
           last_change_time = time.time()
-        elif time.time() - last_change_time > THREAD_PROGRESS_TIMEOUT:
+        elif THREAD_PROGRESS_TIMEOUT > 0 and time.time() - last_change_time > THREAD_PROGRESS_TIMEOUT:
           process.kill()
           progress_bar.cancelled.set(True)
           raise TimeoutError(f"Processing timeout. No progress for {THREAD_PROGRESS_TIMEOUT} seconds.")
