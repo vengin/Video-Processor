@@ -580,12 +580,19 @@ class VideoProcessor:
         "-pix_fmt", "yuv420p",
         "-preset", custom_preset_val,
         # Video options
+        "-map", "0:v",
         "-c:v", "libx264",
         "-crf", crf_val,
 #        "-cpu-used", "8",
         # Audio options
+        "-map", "0:a",
         "-c:a", audio_codec,
         "-b:a", audio_br,
+        "-ac", "2",
+        "-af", "aresample=matrix_encoding=dplii",
+        # Subtitles
+        "-map", "0:s",
+        "-c:s", "copy",
         # Output options
         dst_file_path,
         "-y",  # Force overwrite output file
@@ -612,13 +619,18 @@ class VideoProcessor:
         "-pix_fmt", "yuv420p",
         "-preset", "fast",
         # Video options
+        "-map", "0:v",
         "-c:v", "libx264",
         "-tune", "film",
         "-crf", "25",
 #        "-cpu-used", "8",
         # Audio options
+        "-map", "0:s",
         "-c:a", audio_codec,
         "-b:a", "64k",
+        # Subtitles
+        "-map", "0:s",
+        "-c:s", "copy",
         # Output options
         dst_file_path,
         "-y",  # Force overwrite output file
@@ -639,6 +651,7 @@ class VideoProcessor:
         "-vf", "scale=640:360",
         "-pix_fmt", "yuv420p",
         # Video options
+        "-map", "0:v",
         "-c:v", "libaom-av1",
         "-b:v", "70k",
         "-crf", "30",
@@ -647,8 +660,12 @@ class VideoProcessor:
         "-g", "240",
         "-aq-mode", "0",
         # Audio options
+        "-map", "0:a",
         "-c:a", audio_codec,
         "-b:a", "80k",
+        # Subtitles
+        "-map", "0:s",
+        "-c:s", "copy",
         # Output options
         dst_file_path,
         "-y",  # Force overwrite output file
