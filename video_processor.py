@@ -32,6 +32,7 @@ DFLT_AUDIO_BITRATE = "64k"
 DFLT_CUSTOM_PRESET = "fast"
 DFLT_TUNE_ENABLED = False
 DFLT_CUSTOM_TUNE = "film"
+DFLT_PRESERVE_TIMESTAMPS = True
 
 # MIN/MAX values for custom parameters
 MIN_CRF = 10
@@ -149,6 +150,7 @@ class VideoProcessor:
     self.custom_preset = tk.StringVar(value=DFLT_CUSTOM_PRESET)
     self.tune_enabled = tk.BooleanVar(value=DFLT_TUNE_ENABLED)
     self.custom_tune = tk.StringVar(value=DFLT_CUSTOM_TUNE)
+    self.preserve_timestamps = tk.BooleanVar(value=DFLT_PRESERVE_TIMESTAMPS)
 
     # Initialize GUI variables as empty
     self.ffmpeg_path = tk.StringVar()
@@ -221,6 +223,7 @@ class VideoProcessor:
         'dst_dir': DFLT_DST_DIR,
         'n_threads': str(DFLT_N_THREADS),
         'overwrite_option': DFLT_OVERWRITE_OPTION,  # Skip by default
+        'preserve_timestamps': str(DFLT_PRESERVE_TIMESTAMPS),
       }
     else:
       try:
@@ -283,6 +286,9 @@ class VideoProcessor:
         if ct_val not in valid_tunes:
           ct_val = DFLT_CUSTOM_TUNE
         self.custom_tune.set(ct_val)
+
+        pt_val = self.config['DEFAULT'].getboolean('preserve_timestamps', DFLT_PRESERVE_TIMESTAMPS)
+        self.preserve_timestamps.set(pt_val)
       except Exception as e:
         messagebox.showerror("Config Error", f"Could not load config file: {e}")
 
@@ -307,6 +313,7 @@ class VideoProcessor:
     self.config['DEFAULT']['custom_preset'] = self.custom_preset.get()
     self.config['DEFAULT']['tune_enabled'] = str(self.tune_enabled.get())
     self.config['DEFAULT']['custom_tune'] = self.custom_tune.get()
+    self.config['DEFAULT']['preserve_timestamps'] = str(self.preserve_timestamps.get())
     try:
       with open(DFLT_CONFIG_FILE, 'w') as configfile:
         self.config.write(configfile)
@@ -333,17 +340,26 @@ class VideoProcessor:
 
     # Number of threads 1-DFLT_N_THREADS_MAX
     ttk.Label(self.master, text="Number of threads:").grid(row=3, column=0, sticky=tk.W, padx=5)
-    n_thread_values = list(range(1, DFLT_N_THREADS_MAX+1))  # Creates a list from 1 to DFLT_N_THREADS_MAX
-    self.n_threads_combo = ttk.Combobox(self.master, textvariable=self.n_threads, values=n_thread_values, width=3, state="readonly")
-    self.n_threads_combo.grid(row=3, column=1, sticky=tk.W)
+    threads_frame = ttk.Frame(self.master)
+    threads_frame.grid(row=3, column=1, sticky=tk.W)
 
-    # Overwrite choice
-    ttk.Label(self.master, text="File Overwrite Options:").grid(row=4, column=0, sticky=tk.W, padx=5)
-    self.overwrite_options_combobox = ttk.Combobox(self.master,
+    n_thread_values = list(range(1, DFLT_N_THREADS_MAX+1))  # Creates a list from 1 to DFLT_N_THREADS_MAX
+    self.n_threads_combo = ttk.Combobox(threads_frame, textvariable=self.n_threads, values=n_thread_values, width=3, state="readonly")
+    self.n_threads_combo.pack(side=tk.LEFT)
+
+    # File options in row 4
+    ttk.Label(self.master, text="File Options:").grid(row=4, column=0, sticky=tk.W, padx=5)
+    file_opts_frame = ttk.Frame(self.master)
+    file_opts_frame.grid(row=4, column=1, sticky=tk.W)
+
+    self.overwrite_options_combobox = ttk.Combobox(file_opts_frame,
       textvariable=self.overwrite_options,
       values=[ "Skip existing files", "Overwrite existing files", "Rename existing files"],
       state="readonly")
-    self.overwrite_options_combobox.grid(row=4, column=1, sticky=tk.W)
+    self.overwrite_options_combobox.pack(side=tk.LEFT)
+
+    self.preserve_timestamps_cb = ttk.Checkbutton(file_opts_frame, text="Preserve Original Modification Time", variable=self.preserve_timestamps)
+    self.preserve_timestamps_cb.pack(side=tk.LEFT, padx=(20, 0))
 
     # Preset choice
     ttk.Label(self.master, text="Encoding Preset:").grid(row=5, column=0, sticky=tk.W, padx=5)
@@ -738,7 +754,7 @@ class VideoProcessor:
       while True:
         try:
           stream, line = q.get(timeout=GUI_TIMEOUT)
-          
+
           if line is None:
             if stream == 'stdout': stdout_done = True
             if stream == 'stderr': stderr_done = True
@@ -905,6 +921,18 @@ class VideoProcessor:
 
       # Monitor and update each audio file processing progress
       self.monitor_progress(process, progress_bar, dst_time, relative_path)
+
+      # Preserve modification time if enabled and process finished successfully
+      if self.preserve_timestamps.get() and not progress_bar.cancelled.get() and process.poll() == 0:
+        try:
+          original_mtime = os.stat(src_file_path).st_mtime
+          # Use current access time of the destination file
+          current_atime = os.stat(dst_file_path).st_atime
+          os.utime(dst_file_path, (current_atime, original_mtime))
+          logging.info(f"Preserved modification time for {relative_path}")
+        except Exception as e:
+          logging.warning(f"Failed to preserve modification time for {relative_path}: {e}")
+
       self.master.update_idletasks()
 
       # Remove process from active processes list
@@ -960,8 +988,8 @@ class VideoProcessor:
 
     for src_file_path, dst_file_path in self.processed_dst_files_set:
       if os.path.exists(dst_file_path) and os.path.exists(src_file_path):
-        self.total_dst_sz += os.path.getsize(dst_file_path)
-        self.total_src_sz += os.path.getsize(src_file_path)
+        self.total_dst_sz += os.stat(dst_file_path).st_size
+        self.total_src_sz += os.stat(src_file_path).st_size
         n_files += 1
 
 
@@ -986,7 +1014,8 @@ class VideoProcessor:
           relative_path = os.path.relpath(full_path, src_dir)
           self.queue.put((full_path, relative_path))
           self.total_files += 1
-          self.total_src_sz += os.path.getsize(full_path)
+          file_stat = os.stat(full_path)
+          self.total_src_sz += file_stat.st_size
 
           # Skip existing files
           overwrite_option = self.overwrite_options.get()
@@ -995,7 +1024,7 @@ class VideoProcessor:
           if os.path.exists(dst_file_path) and overwrite_option == "Skip existing files":
             self.skipped_files += 1
             self.file_info[relative_path] = {"duration": 0, "skipped": True}
-            self.total_src_sz -= os.path.getsize(full_path)  # Exclude skipped file size from total
+            self.total_src_sz -= file_stat.st_size  # Exclude skipped file size from total
           else:
             # Get audio file metadata and calculate size
             duration, success = self.get_metadata_info(self.ffmpeg_path.get(), full_path)
