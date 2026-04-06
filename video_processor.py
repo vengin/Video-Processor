@@ -607,7 +607,7 @@ class VideoProcessor:
         "-ac", "2",
         "-af", "aresample=matrix_encoding=dplii",
         # Subtitles
-        "-map", "0:s",
+        "-map", "0:s?",
         "-c:s", "copy",
         # Output options
         dst_file_path,
@@ -641,11 +641,11 @@ class VideoProcessor:
         "-crf", "25",
 #        "-cpu-used", "8",
         # Audio options
-        "-map", "0:s",
+        "-map", "0:a",
         "-c:a", audio_codec,
         "-b:a", "64k",
         # Subtitles
-        "-map", "0:s",
+        "-map", "0:s?",
         "-c:s", "copy",
         # Output options
         dst_file_path,
@@ -680,7 +680,7 @@ class VideoProcessor:
         "-c:a", audio_codec,
         "-b:a", "80k",
         # Subtitles
-        "-map", "0:s",
+        "-map", "0:s?",
         "-c:s", "copy",
         # Output options
         dst_file_path,
