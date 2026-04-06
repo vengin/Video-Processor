@@ -32,8 +32,10 @@ A Python GUI application for video files batch processing, with compression and 
 
 ## Configuration
 
-The application saves its configuration in `video_processor_config.ini` file, which includes:
-- FFmpeg path
+The application saves its configuration in `video_processor_config.ini`. This file is always resolved relative to the directory where the script is located.
+
+The configuration includes:
+- **FFmpeg path**: This must be an **absolute path** to the FFmpeg executable.
 - Last used input (source) and output (destination) directories
 - Tempo value
 - Number of processing threads
@@ -41,17 +43,18 @@ The application saves its configuration in `video_processor_config.ini` file, wh
 
 ## Usage
 
-1. Set the FFmpeg path (first time only)
-2. Select source directory containing video files
-3. Select destination directory for processed files
-4. Adjust tempo value (0.1-2.0, where 1.0 is normal speed)
-5. Choose number of processing threads (1-DFLT_N_THREADS_MAX)
-6. Select file overwrite behavior:
+1. **Set FFmpeg path**: Provide the absolute path to your FFmpeg executable.
+2. **Select Source/Destination Directories**:
+   - Both **absolute** and **relative paths** are supported for source and destination directories.
+   - Relative paths are resolved starting from the directory where the script itself is located.
+3. Adjust tempo value (0.1-2.0, where 1.0 is normal speed)
+4. Choose number of processing threads (1-DFLT_N_THREADS_MAX)
+5. Select file overwrite behavior:
    - Skip existing files
    - Overwrite existing files
    - Rename existing files
-7. Select Encoding Preset (Slow, Fast, or Custom)
-8. Click "Run" to start processing
+6. Select Encoding Preset (Slow, Fast, or Custom)
+7. Click "Run" to start processing
 
 ## Interaction
 

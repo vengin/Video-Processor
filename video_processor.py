@@ -358,7 +358,7 @@ class VideoProcessor:
     self.n_threads_combo.pack(side=tk.LEFT)
 
     # File options in row 4
-    ttk.Label(self.master, text="File Options:").grid(row=4, column=0, sticky=tk.W, padx=5)
+    ttk.Label(self.master, text="File Overwrite Options:").grid(row=4, column=0, sticky=tk.W, padx=5)
     file_opts_frame = ttk.Frame(self.master)
     file_opts_frame.grid(row=4, column=1, sticky=tk.W)
 
