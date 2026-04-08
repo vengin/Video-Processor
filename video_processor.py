@@ -603,7 +603,7 @@ class VideoProcessor:
         # General options
         "-i", src_file_path,
         # Filter options
-        "-vf", f"scale=iw*{vf_scale_val}:-2",
+        "-vf", f"scale=trunc(iw*{vf_scale_val}/2)*2:-2",
         "-pix_fmt", "yuv420p",
         "-preset", custom_preset_val,
         # Video options
