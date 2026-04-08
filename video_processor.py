@@ -934,6 +934,9 @@ class VideoProcessor:
       # Monitor and update each audio file processing progress
       self.monitor_progress(process, progress_bar, dst_time, relative_path)
 
+      if not progress_bar.cancelled.get():
+        self.status_update_queue.put({"append_to": f"Processing: {relative_path}", "message": ". Done"})
+
       # Preserve modification time if enabled and process finished successfully
       if self.preserve_timestamps.get() and not progress_bar.cancelled.get() and process.poll() == 0:
         try:
@@ -1273,15 +1276,28 @@ class VideoProcessor:
 
 
   #############################################################################
-  def update_status(self, message, replace=False):
+  def update_status(self, message, replace=False, append_to=None):
     """Updates the status text area."""
     self.status_text.config(state=tk.NORMAL)  # Enable editing
     if replace:
       self.status_text.delete(1.0, tk.END)
-    self.status_text.insert(tk.END, message + "\n")
+    
+    if append_to:
+      # Search for the line containing append_to
+      pos = self.status_text.search(append_to, "1.0", tk.END)
+      if pos:
+        # Find the end of that line
+        line_num = pos.split('.')[0]
+        end_of_line = f"{line_num}.end"
+        self.status_text.insert(end_of_line, message)
+      else:
+        # Fallback to normal append if pattern not found
+        self.status_text.insert(tk.END, message + "\n")
+    else:
+      self.status_text.insert(tk.END, message + "\n")
+
     self.status_text.see(tk.END)
     self.status_text.config(state=tk.DISABLED)  # Disable editing
-#    self.master.update_idletasks()
 
 
   #############################################################################
@@ -1426,7 +1442,12 @@ class VideoProcessor:
         message = self.status_update_queue.get(timeout=0.1)  # Short timeout to avoid blocking indefinitely
         if message is None: # Check for exit signal
           break
-        self.update_status(message)
+
+        if isinstance(message, dict):
+          self.update_status(message.get('message', ''), append_to=message.get('append_to'))
+        else:
+          self.update_status(message)
+
         self.status_update_queue.task_done()
       except queue.Empty:
         if self.is_shutting_down:  # Check shutdown flag
