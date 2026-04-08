@@ -935,7 +935,10 @@ class VideoProcessor:
       self.monitor_progress(process, progress_bar, dst_time, relative_path)
 
       if not progress_bar.cancelled.get():
-        self.status_update_queue.put({"append_to": f"Processing: {relative_path}", "message": ". Done"})
+        if os.path.getsize(dst_file_path) > 0:
+          self.status_update_queue.put({"append_to": f"Processing: {relative_path}", "message": ". Done"})
+        else:
+          raise ValueError(f"Output file is empty or missing: {dst_file_path}")
 
       # Preserve modification time if enabled and process finished successfully
       if self.preserve_timestamps.get() and not progress_bar.cancelled.get() and process.poll() == 0:
@@ -959,6 +962,7 @@ class VideoProcessor:
 
 
     except Exception as e:
+      self.status_update_queue.put({"append_to": f"Processing: {relative_path}", "message": ". Error"})
       msg = f"Error processing {relative_path}: {e}"
       logging.exception(msg)
       self.status_update_queue.put(msg)
@@ -1281,7 +1285,7 @@ class VideoProcessor:
     self.status_text.config(state=tk.NORMAL)  # Enable editing
     if replace:
       self.status_text.delete(1.0, tk.END)
-    
+
     if append_to:
       # Search for the line containing append_to
       pos = self.status_text.search(append_to, "1.0", tk.END)
