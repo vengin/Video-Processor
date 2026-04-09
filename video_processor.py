@@ -708,15 +708,46 @@ class VideoProcessor:
       # If tempo is not 1, we need to adjust both video and audio streams
       # For video files we need to use tempo value for audio stream and PTS=1/tempo for video
       PTS = 1 / self.tempo.get() # PTS is 1/tempo
-      current_scale = ffmpeg_command[4]
-      ffmpeg_tempo_params = [
-        "-filter:v", f"setpts={PTS:.8f}*PTS,{current_scale}",
-        "-filter:a", f"atempo={self.tempo.get()}",  # tempo audio filter
-      ]
-      # Replace ["-vf", current_scale], use single combined video filter
-      # Cmd example:
-      # ffmpeg.exe -i i.mp4 -filter:v setpts=0.66666667*PTS,scale=640:360 -filter:a atempo=1.5 -vf scale=640:360 -pix_fmt yuv420p -c:v libaom-av1 -b:v 70k -crf 30 -cpu-used 8 -row-mt 1 -g 240 -aq-mode 0 -c:a aac -b:a 80k o.mp4 -y -progress pipe:1 -nostats -hide_banner -loglevel error
-      ffmpeg_command[3:5] = ffmpeg_tempo_params
+
+      # Dynamically find the -vf flag position (robust against -tune insertion or other reordering)
+      try:
+        vf_idx = ffmpeg_command.index("-vf")
+      except ValueError:
+        vf_idx = None
+
+      if vf_idx is not None:
+        current_scale = ffmpeg_command[vf_idx + 1]
+        # Replace ["-vf", current_scale] with the combined video tempo filter
+        ffmpeg_command[vf_idx:vf_idx + 2] = [
+          "-filter:v", f"setpts={PTS:.8f}*PTS,{current_scale}",
+        ]
+      else:
+        # No -vf present; insert a video tempo filter before the output file
+        out_idx = ffmpeg_command.index(dst_file_path)
+        ffmpeg_command[out_idx:out_idx] = [
+          "-filter:v", f"setpts={PTS:.8f}*PTS",
+        ]
+
+      # Merge atempo into the existing -af / -filter:a to avoid the
+      # "multiple -filter options, only last used" ffmpeg warning.
+      # Find existing audio filter flag (-af or -filter:a)
+      af_idx = None
+      for flag in ("-af", "-filter:a"):
+        try:
+          af_idx = ffmpeg_command.index(flag)
+          break
+        except ValueError:
+          pass
+
+      tempo_val = self.tempo.get()
+      if af_idx is not None:
+        # Prepend atempo to the existing audio filter chain
+        existing_af = ffmpeg_command[af_idx + 1]
+        ffmpeg_command[af_idx + 1] = f"atempo={tempo_val},{existing_af}"
+      else:
+        # No existing audio filter -- insert a new one before the output file
+        out_idx = ffmpeg_command.index(dst_file_path)
+        ffmpeg_command[out_idx:out_idx] = ["-filter:a", f"atempo={tempo_val}"]
 
 
     logging.info(f"Process File: FFMPEG command: {' '.join(ffmpeg_command)}")
@@ -935,7 +966,7 @@ class VideoProcessor:
       self.monitor_progress(process, progress_bar, dst_time, relative_path)
 
       if not progress_bar.cancelled.get():
-        if os.path.getsize(dst_file_path) > 0:
+        if os.path.isfile(dst_file_path) and os.path.getsize(dst_file_path) > 0:
           self.status_update_queue.put({"append_to": f"Processing: {relative_path}", "message": ". Done"})
         else:
           raise ValueError(f"Output file is empty or missing: {dst_file_path}")
