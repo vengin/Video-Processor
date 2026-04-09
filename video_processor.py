@@ -960,7 +960,6 @@ class VideoProcessor:
         if progress_bar in self.progress_bar_to_pid:
           del self.progress_bar_to_pid[progress_bar]
 
-
     except Exception as e:
       self.status_update_queue.put({"append_to": f"Processing: {relative_path}", "message": ". Error"})
       msg = f"Error processing {relative_path}: {e}"
@@ -1280,7 +1279,7 @@ class VideoProcessor:
 
 
   #############################################################################
-  def update_status(self, message, replace=False, append_to=None):
+  def update_status(self, message, replace=False, append_to=None, remove=None):
     """Updates the status text area."""
     self.status_text.config(state=tk.NORMAL)  # Enable editing
     if replace:
@@ -1292,13 +1291,24 @@ class VideoProcessor:
       if pos:
         # Find the end of that line
         line_num = pos.split('.')[0]
-        end_of_line = f"{line_num}.end"
-        self.status_text.insert(end_of_line, message)
+        if remove:
+          line_start = f"{line_num}.0"
+          line_end = f"{line_num}.end"
+          remove_pos = self.status_text.search(remove, line_start, line_end)
+          if remove_pos:
+            remove_end = self.status_text.index(f"{remove_pos} + {len(remove)}c")
+            self.status_text.delete(remove_pos, remove_end)
+
+        if message:
+          end_of_line = f"{line_num}.end"
+          self.status_text.insert(end_of_line, message)
       else:
         # Fallback to normal append if pattern not found
-        self.status_text.insert(tk.END, message + "\n")
+        if message:
+          self.status_text.insert(tk.END, message + "\n")
     else:
-      self.status_text.insert(tk.END, message + "\n")
+      if message:
+        self.status_text.insert(tk.END, message + "\n")
 
     self.status_text.see(tk.END)
     self.status_text.config(state=tk.DISABLED)  # Disable editing
@@ -1448,7 +1458,9 @@ class VideoProcessor:
           break
 
         if isinstance(message, dict):
-          self.update_status(message.get('message', ''), append_to=message.get('append_to'))
+          self.update_status(message.get('message', ''),
+                             append_to=message.get('append_to'),
+                             remove=message.get('remove'))
         else:
           self.update_status(message)
 
@@ -1577,15 +1589,15 @@ class VideoProcessor:
         if progress_bar.paused.get():
           p.resume()
           progress_bar.paused.set(False)
-          msg = f"Resumed processing {filename}"
-          logging.info(msg)
-          self.status_update_queue.put(msg)
+          logging.info(f"Resumed processing {filename}")
+          # Remove ". Paused" from the current processing message
+          self.status_update_queue.put({"append_to": f"Processing: {filename}", "remove": ". Paused"})
         else:
           p.suspend()
           progress_bar.paused.set(True)
-          msg = f"Paused processing {filename}"
-          logging.info(msg)
-          self.status_update_queue.put(msg)
+          logging.info(f"Paused processing {filename}")
+          # Append ". Paused" to the current processing message
+          self.status_update_queue.put({"append_to": f"Processing: {filename}", "message": ". Paused"})
         progress_bar.draw_progress_bar()  # Redraw to reflect color change
       except psutil.NoSuchProcess:
         logging.warning(f"Process with PID {pid} not found for pause/resume.")
