@@ -60,6 +60,7 @@ class CustomProgressBar(tk.Canvas):
     self.paused = tk.BooleanVar(value=False)
     self.cancelled = tk.BooleanVar(value=False)
     self.relative_path = None
+    self.paused_filename = None  # Filename captured at pause time
 
     # Set bald font based on parameter
     self.text_font = ('TkDefaultFont', 9, 'bold') if use_bold_font else ('TkDefaultFont', 9)
@@ -1310,7 +1311,7 @@ class VideoProcessor:
 
 
   #############################################################################
-  def update_status(self, message, replace=False, append_to=None, remove=None):
+  def update_status(self, message, replace=False, append_to=None, remove=None, _retries=0):
     """Updates the status text area."""
     self.status_text.config(state=tk.NORMAL)  # Enable editing
     if replace:
@@ -1334,9 +1335,15 @@ class VideoProcessor:
           end_of_line = f"{line_num}.end"
           self.status_text.insert(end_of_line, message)
       else:
-        # Fallback to normal append if pattern not found
-        if message:
-          self.status_text.insert(tk.END, message + "\n")
+        # Target line not in widget yet - retry up to 20 times (~1s) before giving up
+        self.status_text.config(state=tk.DISABLED)
+        if _retries < 20:
+          self.master.after(50, lambda: self.update_status(
+            message, replace=replace, append_to=append_to,
+            remove=remove, _retries=_retries + 1))
+        else:
+          logging.warning(f"update_status: gave up waiting for '{append_to}' after {_retries} retries")
+        return
     else:
       if message:
         self.status_text.insert(tk.END, message + "\n")
@@ -1489,11 +1496,12 @@ class VideoProcessor:
           break
 
         if isinstance(message, dict):
-          self.update_status(message.get('message', ''),
-                             append_to=message.get('append_to'),
-                             remove=message.get('remove'))
+          self.master.after(0, lambda m=message: self.update_status(
+            m.get('message', ''),
+            append_to=m.get('append_to'),
+            remove=m.get('remove')))
         else:
-          self.update_status(message)
+          self.master.after(0, lambda m=message: self.update_status(m))
 
         self.status_update_queue.task_done()
       except queue.Empty:
@@ -1617,18 +1625,25 @@ class VideoProcessor:
       try:
         p = psutil.Process(pid)
         filename = progress_bar.filename_var.get()
+        if not filename:
+          # No file loaded yet; nothing to pause/resume in status
+          return
+        # Use relative_path for status text search (matches what handle_overwrite wrote)
+        # Fall back to filename_var if relative_path not set
+        status_key = progress_bar.relative_path or filename
         if progress_bar.paused.get():
           p.resume()
           progress_bar.paused.set(False)
           logging.info(f"Resumed processing {filename}")
-          # Remove ". Paused" from the current processing message
-          self.status_update_queue.put({"append_to": f"Processing: {filename}", "remove": ". Paused"})
+          paused_key = progress_bar.paused_filename or status_key
+          progress_bar.paused_filename = None
+          self.status_update_queue.put({"append_to": f"Processing: {paused_key}", "remove": ". Paused"})
         else:
           p.suspend()
           progress_bar.paused.set(True)
+          progress_bar.paused_filename = status_key
           logging.info(f"Paused processing {filename}")
-          # Append ". Paused" to the current processing message
-          self.status_update_queue.put({"append_to": f"Processing: {filename}", "message": ". Paused"})
+          self.status_update_queue.put({"append_to": f"Processing: {status_key}", "message": ". Paused"})
         progress_bar.draw_progress_bar()  # Redraw to reflect color change
       except psutil.NoSuchProcess:
         logging.warning(f"Process with PID {pid} not found for pause/resume.")
