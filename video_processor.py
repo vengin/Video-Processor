@@ -35,6 +35,10 @@ DFLT_TUNE_ENABLED = False
 DFLT_CUSTOM_TUNE = "film"
 DFLT_PRESERVE_TIMESTAMPS = True
 
+# Fixed Output Height
+DFLT_FIXED_HEIGHT_ENABLED = False
+DFLT_FIXED_HEIGHT_VAL = 360
+
 # MIN/MAX values for custom parameters
 MIN_CRF = 10
 MAX_CRF = 51
@@ -153,6 +157,8 @@ class VideoProcessor:
     self.tune_enabled = tk.BooleanVar(value=DFLT_TUNE_ENABLED)
     self.custom_tune = tk.StringVar(value=DFLT_CUSTOM_TUNE)
     self.preserve_timestamps = tk.BooleanVar(value=DFLT_PRESERVE_TIMESTAMPS)
+    self.fixed_height_enabled = tk.BooleanVar(value=DFLT_FIXED_HEIGHT_ENABLED)
+    self.fixed_height_val = tk.StringVar(value=str(DFLT_FIXED_HEIGHT_VAL))
 
     # Initialize GUI variables as empty
     self.ffmpeg_path = tk.StringVar()
@@ -235,6 +241,8 @@ class VideoProcessor:
         'n_threads': str(DFLT_N_THREADS),
         'overwrite_option': DFLT_OVERWRITE_OPTION,  # Skip by default
         'preserve_timestamps': str(DFLT_PRESERVE_TIMESTAMPS),
+        'fixed_height_enabled': str(DFLT_FIXED_HEIGHT_ENABLED),
+        'fixed_height_val': str(DFLT_FIXED_HEIGHT_VAL),
       }
     else:
       try:
@@ -300,6 +308,17 @@ class VideoProcessor:
 
         pt_val = self.config['DEFAULT'].getboolean('preserve_timestamps', DFLT_PRESERVE_TIMESTAMPS)
         self.preserve_timestamps.set(pt_val)
+
+        fh_en_val = self.config['DEFAULT'].getboolean('fixed_height_enabled', DFLT_FIXED_HEIGHT_ENABLED)
+        self.fixed_height_enabled.set(fh_en_val)
+
+        try:
+          fh_val = int(self.config['DEFAULT'].get('fixed_height_val', str(DFLT_FIXED_HEIGHT_VAL)))
+          if fh_val < 2:
+            fh_val = DFLT_FIXED_HEIGHT_VAL
+        except ValueError:
+          fh_val = DFLT_FIXED_HEIGHT_VAL
+        self.fixed_height_val.set(str(fh_val))
       except Exception as e:
         messagebox.showerror("Config Error", f"Could not load config file: {e}")
 
@@ -325,6 +344,8 @@ class VideoProcessor:
     self.config['DEFAULT']['tune_enabled'] = str(self.tune_enabled.get())
     self.config['DEFAULT']['custom_tune'] = self.custom_tune.get()
     self.config['DEFAULT']['preserve_timestamps'] = str(self.preserve_timestamps.get())
+    self.config['DEFAULT']['fixed_height_enabled'] = str(self.fixed_height_enabled.get())
+    self.config['DEFAULT']['fixed_height_val'] = str(self.fixed_height_val.get())
     try:
       with open(DFLT_CONFIG_FILE, 'w') as configfile:
         self.config.write(configfile)
@@ -409,10 +430,19 @@ class VideoProcessor:
     self.crf_entry.pack(side=tk.LEFT, padx=(0, 10))
     self.crf_entry.bind('<FocusOut>', self.on_crf_focusout)
 
+    self.fixed_height_checkbox = ttk.Checkbutton(self.custom_opts_frame, text="Fixed Height:", variable=self.fixed_height_enabled, command=self.on_fixed_height_toggle)
+    self.fixed_height_checkbox.pack(side=tk.LEFT, padx=(0, 2))
+
+    self.fixed_height_entry = ttk.Entry(self.custom_opts_frame, textvariable=self.fixed_height_val, width=4)
+    self.fixed_height_entry.pack(side=tk.LEFT, padx=(0, 10))
+    self.fixed_height_entry.bind('<FocusOut>', self.on_fixed_height_focusout)
+
     ttk.Label(self.custom_opts_frame, text="VF Scale:").pack(side=tk.LEFT, padx=(0, 2))
     self.vf_scale_entry = ttk.Entry(self.custom_opts_frame, textvariable=self.vf_scale, width=4)
     self.vf_scale_entry.pack(side=tk.LEFT, padx=(0, 10))
     self.vf_scale_entry.bind('<FocusOut>', self.on_vf_scale_focusout)
+
+    self.on_fixed_height_toggle()
 
     ttk.Label(self.custom_opts_frame, text="Audio Bitrate:").pack(side=tk.LEFT, padx=(0, 2))
     self.audio_bitrate_entry = ttk.Entry(self.custom_opts_frame, textvariable=self.audio_bitrate, width=5)
@@ -476,6 +506,30 @@ class VideoProcessor:
 
 
   #############################################################################
+  def on_fixed_height_toggle(self, event=None):
+    """Enables or disables fixed height options and vf scale based on checkbox."""
+    if self.fixed_height_enabled.get():
+      self.fixed_height_entry.config(state="normal")
+      self.vf_scale_entry.config(state="disabled")
+    else:
+      self.fixed_height_entry.config(state="disabled")
+      self.vf_scale_entry.config(state="normal")
+
+
+  #############################################################################
+  def on_fixed_height_focusout(self, event):
+    """Handles fixed height entry focus out event, validating the input."""
+    try:
+      fhv = int(self.fixed_height_val.get())
+      if fhv < 2:
+        messagebox.showerror("Invalid Fixed Height", "Height must be at least 2.")
+        self.fixed_height_val.set(str(DFLT_FIXED_HEIGHT_VAL))
+    except ValueError:
+      messagebox.showerror("Invalid Fixed Height", "Please enter a valid integer for Fixed Height.")
+      self.fixed_height_val.set(str(DFLT_FIXED_HEIGHT_VAL))
+
+
+  #############################################################################
   def check_executables(self):
     """Verifies that FFMPEG and FFPROBE executables exist."""
     ffmpeg_path = self.ffmpeg_path.get()
@@ -491,17 +545,17 @@ class VideoProcessor:
 
   #############################################################################
   def get_metadata_info(self, ffmpeg_path, src_file_path):
-    """Gets media file metadata (Duration) using FFPROBE."""
+    """Gets media file metadata (Duration and Height) using FFPROBE."""
     try:
       # Derive ffprobe_path from ffmpeg_path
       ffprobe_path = os.path.join(os.path.dirname(ffmpeg_path), "ffprobe.exe")
       if not os.path.exists(ffprobe_path):
         logging.error(f"FFPROBE not found at: {ffprobe_path}")
-        return None, False
+        return None, None, False
 
       ffprobe_cmd = [
         ffprobe_path, '-v', 'error',
-        '-show_entries', 'format=duration',
+        '-show_entries', 'format=duration:stream=width,height',
         '-of', 'json',
         src_file_path
       ]
@@ -509,14 +563,21 @@ class VideoProcessor:
       info = json.loads(rslt.stdout)
       total_seconds = int(float(info['format']['duration']))  # seconds
 
+      height = None
+      if 'streams' in info:
+        for stream in info['streams']:
+          if 'height' in stream:
+            height = stream['height']
+            break
+
     except subprocess.CalledProcessError as e:
       logging.error(f"FFPROBE error for {src_file_path}: {e.stderr}")
-      return None, False
+      return None, None, False
     except Exception as e:
       logging.error(f"Error getting Tag info from {src_file_path}: {e}")
-      return None, False
+      return None, None, False
 
-    return total_seconds, True
+    return total_seconds, height, True
 
 
   #############################################################################
@@ -557,7 +618,7 @@ class VideoProcessor:
 
 
   #############################################################################
-  def generate_ffmpeg_command(self, src_file_path, dst_file_path):
+  def generate_ffmpeg_command(self, src_file_path, dst_file_path, relative_path=None):
     """Generates FFMPEG command for compression with optional tempo."""
     # Convert paths to string and handle potential encoding issues
     src_file_path = str(src_file_path)
@@ -579,7 +640,18 @@ class VideoProcessor:
         self.crf.set(crf_val)
 
       try:
-        vf_scale_val = min(max(float(self.vf_scale.get()), MIN_VF_SCALE), MAX_VF_SCALE)
+        if self.fixed_height_enabled.get():
+          # Calculate custom vf_scale_val for this file
+          file_data = self.file_info[relative_path] if relative_path else None
+          input_height = file_data.get("height") if file_data else None
+          if input_height and input_height > 0:
+            target_height = int(self.fixed_height_val.get())
+            vf_scale_val = target_height / input_height
+          else:
+            # Fallback if height could not be read
+            vf_scale_val = min(max(float(self.vf_scale.get()), MIN_VF_SCALE), MAX_VF_SCALE)
+        else:
+          vf_scale_val = min(max(float(self.vf_scale.get()), MIN_VF_SCALE), MAX_VF_SCALE)
       except ValueError:
         vf_scale_val = DFLT_VF_SCALE
         self.vf_scale.set(str(vf_scale_val))
@@ -956,7 +1028,7 @@ class VideoProcessor:
       progress_bar.relative_path = relative_path
 
       # Generate ffmpeg command for video compression
-      ffmpeg_command = self.generate_ffmpeg_command(src_file_path, dst_file_path)
+      ffmpeg_command = self.generate_ffmpeg_command(src_file_path, dst_file_path, relative_path)
       # Start FFMPEG process in binary mode for each file (n_threads)
       process = subprocess.Popen(
         ffmpeg_command,
@@ -1088,11 +1160,11 @@ class VideoProcessor:
             self.file_info[relative_path] = {"duration": 0, "skipped": True}
             self.total_src_sz -= file_stat.st_size  # Exclude skipped file size from total
           else:
-            # Get audio file metadata and calculate size
-            duration, success = self.get_metadata_info(self.ffmpeg_path.get(), full_path)
+            # Get media file metadata and calculate size
+            duration, height, success = self.get_metadata_info(self.ffmpeg_path.get(), full_path)
             if success:
               duration_tempo = duration/self.tempo.get()
-              self.file_info[relative_path] = {"duration": duration_tempo, "skipped": False}
+              self.file_info[relative_path] = {"duration": duration_tempo, "height": height, "skipped": False}
               # logging.debug(f"{relative_path}: dst_est_sz_kbt={dst_est_sz_kbt}")
               dst_seconds = int(duration_tempo)
               self.total_dst_seconds += dst_seconds
