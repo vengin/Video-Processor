@@ -788,10 +788,11 @@ class VideoProcessor:
     stderr_thread.daemon = True
     stderr_thread.start()
 
-    last_change_time = time.time()
     last_processed_us = -1
     stdout_done = False
     stderr_done = False
+    accumulated_idle = 0.0   # total idle seconds, immune to sleep spikes
+    last_tick_time = time.time()
 
     try:
       while True:
@@ -805,8 +806,9 @@ class VideoProcessor:
               break
             continue
 
-          # Any activity from FFmpeg (stdout or stderr) resets the timeout clock
-          last_change_time = time.time()
+          # Any activity from FFmpeg resets the accumulated idle counter
+          accumulated_idle = 0.0
+          last_tick_time = time.time()
 
           if stream == 'stderr':
             err_msg = line.strip()
@@ -843,13 +845,20 @@ class VideoProcessor:
             break
           time.sleep(GUI_TIMEOUT)
 
-        # Check for timeout
+        # Accumulate idle time, capping each tick to avoid sleep/suspend spikes
         if getattr(progress_bar, 'paused', None) and progress_bar.paused.get():
-          last_change_time = time.time()
-        elif THREAD_PROGRESS_TIMEOUT > 0 and time.time() - last_change_time > THREAD_PROGRESS_TIMEOUT:
-          process.kill()
-          progress_bar.cancelled.set(True)
-          raise TimeoutError(f"Processing timeout. No progress for {THREAD_PROGRESS_TIMEOUT} seconds.")
+          # Paused by user - reset tick time but don't accumulate
+          last_tick_time = time.time()
+        elif THREAD_PROGRESS_TIMEOUT > 0:
+          now = time.time()
+          tick = now - last_tick_time
+          last_tick_time = now
+          # Cap each tick: any gap larger than 2x GUI_TIMEOUT (e.g. from sleep) is ignored
+          accumulated_idle += min(tick, GUI_TIMEOUT * 2)
+          if accumulated_idle > THREAD_PROGRESS_TIMEOUT:
+            process.kill()
+            progress_bar.cancelled.set(True)
+            raise TimeoutError(f"Processing timeout. No progress for {THREAD_PROGRESS_TIMEOUT} seconds.")
 
     except TimeoutError:
       # TimeoutError will be logged/handled by the caller (process_file)
@@ -968,7 +977,7 @@ class VideoProcessor:
 
       if not progress_bar.cancelled.get():
         if os.path.isfile(dst_file_path) and os.path.getsize(dst_file_path) > 0:
-          self.status_update_queue.put({"append_to": f"Processing: {relative_path}", "message": ". Done"})
+          self.status_update_queue.put({"append_to": f"Processing: {relative_path}", "message": " | Done"})
         else:
           raise ValueError(f"Output file is empty or missing: {dst_file_path}")
 
@@ -993,7 +1002,7 @@ class VideoProcessor:
           del self.progress_bar_to_pid[progress_bar]
 
     except Exception as e:
-      self.status_update_queue.put({"append_to": f"Processing: {relative_path}", "message": ". Error"})
+      self.status_update_queue.put({"append_to": f"Processing: {relative_path}", "message": " | Error"})
       msg = f"Error processing {relative_path}: {e}"
       logging.exception(msg)
       self.status_update_queue.put(msg)
@@ -1637,13 +1646,13 @@ class VideoProcessor:
           logging.info(f"Resumed processing {filename}")
           paused_key = progress_bar.paused_filename or status_key
           progress_bar.paused_filename = None
-          self.status_update_queue.put({"append_to": f"Processing: {paused_key}", "remove": ". Paused"})
+          self.status_update_queue.put({"append_to": f"Processing: {paused_key}", "remove": " | Paused"})
         else:
           p.suspend()
           progress_bar.paused.set(True)
           progress_bar.paused_filename = status_key
           logging.info(f"Paused processing {filename}")
-          self.status_update_queue.put({"append_to": f"Processing: {status_key}", "message": ". Paused"})
+          self.status_update_queue.put({"append_to": f"Processing: {status_key}", "message": " | Paused"})
         progress_bar.draw_progress_bar()  # Redraw to reflect color change
       except psutil.NoSuchProcess:
         logging.warning(f"Process with PID {pid} not found for pause/resume.")
