@@ -145,6 +145,7 @@ The application logs processing details and errors to `video_processor.log` file
 - **-preset** option: from `ultrafast` to `placebo`
 - **-tune** option (optional): `film`, `animation`, `grain`, `stillimage`, `psnr`, `ssim`, `fastdecode`, `zerolatency`
 - **Constant Rate Factor (CRF)**: range 10-51
+- **Fixed Height**: Set `fixed height` for output video, automatically calculating `VF Scale` parameter for each video (GUI `Video Filter (VF) Scale` is ignored)
 - **Video Filter (VF) Scale**: range 0.25-1.0
 - **Audio Bitrate (-b:a)**: e.g. 64k, 96K, 1M
 ![Video Compression Processor - Preset3: Custom](./docs/Video-Compression-Processor_Preset3-Custom(GUI).png)
