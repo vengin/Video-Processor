@@ -1402,6 +1402,9 @@ class VideoProcessor:
   #############################################################################
   def update_status(self, message, replace=False, append_to=None, remove=None, _retries=0):
     """Updates the status text area."""
+    assert threading.current_thread() is threading.main_thread(), \
+      "update_status must only be called from the main thread"
+
     self.status_text.config(state=tk.NORMAL)  # Enable editing
     if replace:
       self.status_text.delete(1.0, tk.END)
