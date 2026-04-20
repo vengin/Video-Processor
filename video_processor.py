@@ -1080,7 +1080,8 @@ class VideoProcessor:
       msg = f"Error processing {relative_path}: {e}"
       logging.exception(msg)
       self.status_update_queue.put(msg)
-      self.error_files += 1
+      with self.processed_files_lock:
+        self.error_files += 1
 
       # Wait briefly to ensure ffmpeg process has fully terminated and released the file handle
       if process:
@@ -1158,7 +1159,8 @@ class VideoProcessor:
           dst_relative_path_base, ext = os.path.splitext(relative_path)
           dst_file_path = os.path.join(resolved_dst_dir, dst_relative_path_base + ext)
           if os.path.exists(dst_file_path) and overwrite_option == "Skip existing files":
-            self.skipped_files += 1
+            with self.processed_files_lock:
+              self.skipped_files += 1
             self.file_info[relative_path] = {"duration": 0, "skipped": True}
             self.total_src_sz -= file_stat.st_size  # Exclude skipped file size from total
           else:
@@ -1175,7 +1177,8 @@ class VideoProcessor:
               msg = f"Could not get media file metadata for {full_path}"
               logging.error(msg)
               self.status_update_queue.put(msg)
-              self.error_files += 1
+              with self.processed_files_lock:
+                self.error_files += 1
               # Ensure file_info is populated even on failure to avoid KeyError later
               self.file_info[relative_path] = {"duration": 0, "skipped": True}
 
@@ -1645,7 +1648,8 @@ class VideoProcessor:
 
           progress_bar.cancelled.set(True)
           progress_bar.draw_progress_bar()
-          self.cancelled_files += 1
+          with self.processed_files_lock:
+            self.cancelled_files += 1
           msg = f"Cancelled processing {filename}"
           logging.info(msg)
           self.status_update_queue.put(msg)
