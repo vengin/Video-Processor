@@ -216,7 +216,7 @@ class VideoProcessor:
     logging.info("Status update thread started.")
 
     # Using this flag for more gracefull shutdown, if closing application while files are still processed
-    self.is_shutting_down = False
+    self._shutdown_event = threading.Event() # False
 
 
   def resolve_path(self, path_str):
@@ -953,7 +953,7 @@ class VideoProcessor:
   #############################################################################
   def update_total_progress(self, relative_path=None):
     """Updates the total progress bar based on cumulative processed size."""
-    if self.is_shutting_down:
+    if self._shutdown_event.is_set():
       return
 
     current_time = time.time()
@@ -1270,7 +1270,7 @@ class VideoProcessor:
   def on_closing(self):
     """Handles window closing event, saving configuration."""
     logging.info("Starting application shutdown sequence...")
-    self.is_shutting_down = True
+    self._shutdown_event.set() # True
     self.save_config()
 
     # Kill all FFMPEG processes first
@@ -1594,7 +1594,7 @@ class VideoProcessor:
 
         self.status_update_queue.task_done()
       except queue.Empty:
-        if self.is_shutting_down:  # Check shutdown flag
+        if self._shutdown_event.is_set():
           break
         continue
       except Exception as e:
