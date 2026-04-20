@@ -1054,15 +1054,17 @@ class VideoProcessor:
           raise ValueError(f"Output file is empty or missing: {dst_file_path}")
 
       # Preserve modification time if enabled and process finished successfully
-      if self.preserve_timestamps.get() and not progress_bar.cancelled.get() and process.poll() == 0:
-        try:
-          original_mtime = os.stat(src_file_path).st_mtime
+      if self.preserve_timestamps.get() and not progress_bar.cancelled.get():
+        exit_code = process.wait()  # Ensure process is fully reaped before checking exit code
+        if exit_code == 0:
+          try:
+            original_mtime = os.stat(src_file_path).st_mtime
           # Use current access time of the destination file
-          current_atime = os.stat(dst_file_path).st_atime
-          os.utime(dst_file_path, (current_atime, original_mtime))
-          logging.info(f"Preserved modification time for {relative_path}")
-        except Exception as e:
-          logging.warning(f"Failed to preserve modification time for {relative_path}: {e}")
+            current_atime = os.stat(dst_file_path).st_atime
+            os.utime(dst_file_path, (current_atime, original_mtime))
+            logging.info(f"Preserved modification time for {relative_path}")
+          except Exception as e:
+            logging.warning(f"Failed to preserve modification time for {relative_path}: {e}")
 
       self.master.update_idletasks()
 
