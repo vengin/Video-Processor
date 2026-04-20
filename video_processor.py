@@ -1695,16 +1695,17 @@ class VideoProcessor:
   #############################################################################
   def start_new_task_if_needed(self):
     """Checks if a new task can be started and starts one."""
-    if not self.queue.empty() and self.active_threads < self.n_threads.get():
-      # Find a free progress bar
-      for i, pb in enumerate(self.progress_bars):
-        if pb not in self.progress_bar_to_pid:
-          thread = threading.Thread(target=self.worker, args=(i,), name=f"Worker-{i}")
-          thread.daemon = True
-          self.threads.append(thread)
-          thread.start()
-          self.active_threads += 1
-          break
+    with self.processed_files_lock:
+     if not self.queue.empty() and self.active_threads < self.n_threads.get():
+       # Find a free progress bar
+       for i, pb in enumerate(self.progress_bars):
+         if pb not in self.progress_bar_to_pid:
+           thread = threading.Thread(target=self.worker, args=(i,), name=f"Worker-{i}")
+           thread.daemon = True
+           self.threads.append(thread)
+           thread.start()
+           self.active_threads += 1
+           break
 
 
   #############################################################################
