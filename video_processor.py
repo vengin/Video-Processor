@@ -1120,8 +1120,8 @@ class VideoProcessor:
     self.total_src_sz = 0
     n_files = 0
 
-
-    for src_file_path, dst_file_path in self.processed_dst_files_set:
+    processed_dst_files_set_snapshot = set(self.processed_dst_files_set)
+    for src_file_path, dst_file_path in processed_dst_files_set_snapshot:
       if os.path.exists(dst_file_path) and os.path.exists(src_file_path):
         self.total_dst_sz += os.stat(dst_file_path).st_size
         self.total_src_sz += os.stat(src_file_path).st_size
