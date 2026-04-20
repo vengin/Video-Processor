@@ -1254,7 +1254,7 @@ class VideoProcessor:
         self.queue.task_done()  # Ensure task is marked as done even on error
         continue
 
-    with threading.Lock():  # Use a lock to safely decrement active_threads
+    with self.processed_files_lock:
       self.active_threads -= 1
       if self.active_threads == 0 and not self.is_shutting_down:
         try:
