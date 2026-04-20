@@ -998,10 +998,11 @@ class VideoProcessor:
   def process_file(self, src_file_path, relative_path, progress_bar):
     """Processes a single audio file, handling potential overwrites."""
 
-    if relative_path in self.processed_files_set:
-      return  # Skip if already processed
+    with self.processed_files_lock:
+      if relative_path in self.processed_files_set:
+        return  # Skip if already processed
+      self.processed_files_set.add(relative_path)
 
-    self.processed_files_set.add(relative_path)
     process = None  # Define process outside try block
     dst_file_path = None
     try:
@@ -1241,7 +1242,9 @@ class VideoProcessor:
         self.queue.task_done()
 
         # Check if this was the last file
-        if len(self.processed_files_set) >= self.total_files:
+        with self.processed_files_lock:
+          n_processed = len(self.processed_files_set)
+        if n_processed >= self.total_files:
           break
 
       except queue.Empty:
