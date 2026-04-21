@@ -1109,7 +1109,7 @@ class VideoProcessor:
           del self.active_processes[process.pid]
         if progress_bar in self.progress_bar_to_pid:
             del self.progress_bar_to_pid[progress_bar]
-      if not self.is_shutting_down:
+      if not self._shutdown_event.is_set():
         self.update_total_progress(relative_path) # Update total progress after each file
 
 
@@ -1225,7 +1225,7 @@ class VideoProcessor:
     """Worker function for each thread, processing files from the queue."""
     progress_bar = self.progress_bars[thread_index]
 
-    while not self.is_shutting_down:  # Check shutdown flag
+    while not self._shutdown_event.is_set():  # Check shutdown flag
       try:
         # Reduced timeout to make thread more responsive to shutdown
         file_path, relative_path = self.queue.get(timeout=0.1)
@@ -1234,7 +1234,7 @@ class VideoProcessor:
         # We don't reset progress here, it will be done in process_file along with the brand-new filename.
 
         # Check shutdown flag immediately after getting item
-        if file_path is None or self.is_shutting_down:
+        if file_path is None or self._shutdown_event.is_set():
           self.queue.task_done()
           break
 
@@ -1259,7 +1259,7 @@ class VideoProcessor:
 
     with self.processed_files_lock:
       self.active_threads -= 1
-      if self.active_threads == 0 and not self.is_shutting_down:
+      if self.active_threads == 0 and not self._shutdown_event.is_set():
         try:
           self.master.after(100, self.finish_processing)
         except tk.TclError:
